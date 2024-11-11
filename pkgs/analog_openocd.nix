@@ -30,21 +30,16 @@
   libtool,
   which,
   libftdi1,
-  fetchgit,
-  fetchFromGitHub,
-#   analog-openocd
 }:
 stdenv.mkDerivation {
   pname = "openocd-analog";
   version = "0.12.0";
 
-  src = fetchgit {
+  src = builtins.fetchGit {
     url = "https://github.com/analogdevicesinc/openocd.git";
-    rev = "f73da81abc674d60b91fa3cdfae6db69a3a9e385";
-    fetchSubmodules = true;
-    hash = lib.fakeHash;
+    rev = "5fc33afb75270f77089e634983c7b87936e4891f";
+    submodules = true;
   };
-  # src = analog-openocd;
 
   nativeBuiltInputs = [pkg-config];
 
