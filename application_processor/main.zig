@@ -1,19 +1,21 @@
 const std = @import("std");
 
-const params = @cImport({
-    @cInclude("ectf_params.h");
-});
+// const params = @cImport({
+//     @cInclude("ectf_params.h");
+// });
 
 const msdk = @import("msdk");
+const params = @import("params");
 
 pub export fn main() noreturn {
     _ = msdk.LED_Init();
-
     initI2C() catch {
         msdk.LED_On(msdk.LED1);
         _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(5000));
     };
     msdk.LED_Off(msdk.LED1);
+
+    _ = params.AP_PIN;
 
     sendI2C("Hello, world!") catch {
         msdk.LED_On(msdk.LED3);

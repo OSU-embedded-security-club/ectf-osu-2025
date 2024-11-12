@@ -90,6 +90,20 @@ pub fn build(b: *std.Build) !void {
 
     exe.addIncludePath(b.path("application_processor/inc"));
 
+    if (std.fs.cwd().openFile(b.pathFromRoot("application_processor/inc/ectf_params.h"), .{})) |_| {
+        const params = b.addTranslateC(.{
+            .root_source_file = b.path("application_processor/inc/ectf_params.h"),
+            .target = target,
+            .optimize = .ReleaseSafe,
+            .link_libc = false,
+        });
+        exe.root_module.addImport("params", params.createModule());
+    } else |_| {
+        exe.root_module.addAnonymousImport("params", .{
+            .root_source_file = b.path("default_params.zig"),
+        });
+    }
+
     const lib_dir_step = try ZigLibDir.create(b);
     step.dependOn(&lib_dir_step.step);
     step.dependOn(&b.addInstallFile(lib_dir_step.getLibPath().path(b, "zig.h"), "../application_processor/c/src/zig.h").step);
