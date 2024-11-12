@@ -1,8 +1,8 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) !void {
-    const step = b.step("application-processor", "Build the application processor");
-    b.default_step.dependOn(step);
+    const apStep = b.step("application-processor", "Build the application processor");
+    b.default_step.dependOn(apStep);
 
     const target = b.resolveTargetQuery(.{
         .cpu_arch = .thumb,
@@ -64,8 +64,6 @@ pub fn build(b: *std.Build) !void {
 
     const gcc_arm_embedded_path = env.get("GCC_ARM_EMBDEDDED").?;
     const global_include_paths = [_][]const u8{
-        "lib/gcc/arm-none-eabi/12.3.1/include",
-        "lib/gcc/arm-none-eabi/12.3.1/include-fixed",
         "arm-none-eabi/include",
     };
     for (global_include_paths) |global_include_path| {
@@ -88,8 +86,6 @@ pub fn build(b: *std.Build) !void {
 
     exe.root_module.addImport("msdk", msdk.createModule());
 
-    exe.addIncludePath(b.path("application_processor/inc"));
-
     if (std.fs.cwd().openFile(b.pathFromRoot("application_processor/inc/ectf_params.h"), .{})) |_| {
         const params = b.addTranslateC(.{
             .root_source_file = b.path("application_processor/inc/ectf_params.h"),
@@ -105,15 +101,31 @@ pub fn build(b: *std.Build) !void {
     }
 
     const lib_dir_step = try ZigLibDir.create(b);
-    step.dependOn(&lib_dir_step.step);
-    step.dependOn(&b.addInstallFile(lib_dir_step.getLibPath().path(b, "zig.h"), "../application_processor/c/src/zig.h").step);
+    apStep.dependOn(&lib_dir_step.step);
+    apStep.dependOn(&b.addInstallFile(lib_dir_step.getLibPath().path(b, "zig.h"), "../application_processor/c/src/zig.h").step);
 
-    step.dependOn(&b.addInstallFile(msdk.getOutput(), "msdk.zig").step);
+    apStep.dependOn(&b.addInstallFile(msdk.getOutput(), "msdk.zig").step);
 
-    step.dependOn(&b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = "../application_processor/c/src" } } }).step);
+    apStep.dependOn(&b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = "../application_processor/c/src" } } }).step);
 
-    step.dependOn(&exe.step);
-    step.dependOn(&msdk.step);
+    const test_step = b.step("test", "Run unit tests");
+    const unit_tests = b.addTest(.{
+        .root_source_file = b.path("test.zig"),
+        .target = b.resolveTargetQuery(.{}),
+    });
+    const run_unit_tests = b.addRunArtifact(unit_tests);
+    test_step.dependOn(&run_unit_tests.step);
+
+    const install_docs = b.addInstallDirectory(.{
+        .source_dir = exe.getEmittedDocs(),
+        .install_dir = .{ .custom = ".." },
+        .install_subdir = "docs",
+    });
+    const docs_step = b.step("docs", "Generate documentation");
+    docs_step.dependOn(&install_docs.step);
+
+    apStep.dependOn(&exe.step);
+    apStep.dependOn(&msdk.step);
 }
 
 const ZigLibDir = struct {

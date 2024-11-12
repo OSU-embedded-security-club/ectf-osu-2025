@@ -1,0 +1,66 @@
+name: Zig
+on:
+  pull_request:
+  push:
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install zig
+      run: |
+        curl -sSfL https://ziglang.org/download/0.13.0/zig-linux-x86-0.13.0.tar.xz | tar -xJ
+        echo $PWD/zig-linux-x86-0.13.0 >> $GITHUB_PATH
+
+    - name: Format
+      run: zig fmt --check .
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install zig
+      run: |
+        curl -sSfL https://ziglang.org/download/0.13.0/zig-linux-x86-0.13.0.tar.xz | tar -xJ
+        echo $PWD/zig-linux-x86-0.13.0 >> $GITHUB_PATH
+
+    - name: Install msdk
+      run: |
+        git clone --depth=1 --branch v2023_06 https://github.com/Analog-Devices-MSDK/msdk
+        echo "MAXIM_PATH=$PWD/msdk" >> $GITHUB_ENV
+
+    - name: Install ARM GCC
+      run: |
+        sudo apt-get install -y gcc-arm-none-eabi
+        echo "GCC_ARM_EMBDEDDED=/usr/lib" >> $GITHUB_ENV
+
+    - name: Run tests
+      run: zig build test --summary all
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install zig
+      run: |
+        curl -sSfL https://ziglang.org/download/0.13.0/zig-linux-x86-0.13.0.tar.xz | tar -xJ
+        echo $PWD/zig-linux-x86-0.13.0 >> $GITHUB_PATH
+
+    - name: Install msdk
+      run: |
+        git clone --depth=1 --branch v2023_06 https://github.com/Analog-Devices-MSDK/msdk
+        echo "MAXIM_PATH=$PWD/msdk" >> $GITHUB_ENV
+
+    - name: Install ARM GCC
+      run: |
+        sudo apt-get install -y gcc-arm-none-eabi
+        echo "GCC_ARM_EMBDEDDED=/usr/lib" >> $GITHUB_ENV
+
+    - name: Build documentation
+      run: zig build docs

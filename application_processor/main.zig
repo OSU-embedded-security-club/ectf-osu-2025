@@ -7,6 +7,7 @@ const std = @import("std");
 const msdk = @import("msdk");
 const params = @import("params");
 
+/// Entrypoint for the application processor
 pub export fn main() noreturn {
     _ = msdk.LED_Init();
     initI2C() catch {
@@ -47,7 +48,8 @@ const I2C_ADDR = 0x50;
 const I2C_INTERFACE = msdk.MXC_I2C1;
 const I2C_SPEED = 10000;
 
-fn initI2C() !void {
+/// Initializes the I2C interface. Should be called exactly once
+pub fn initI2C() !void {
     msdk.MXC_ICC_Enable(msdk.MXC_ICC0);
 
     _ = msdk.MXC_SYS_Clock_Select(msdk.MXC_SYS_CLOCK_IPO);
@@ -62,7 +64,8 @@ fn initI2C() !void {
     msdk.MXC_I2C_SetTimeout(I2C_INTERFACE, 100);
 }
 
-fn sendI2C(data: []const u8) !void {
+/// Requires `initI2C` to have already been called
+pub fn sendI2C(data: []const u8) !void {
     const request = msdk.mxc_i2c_req_t{
         .i2c = I2C_INTERFACE,
         .addr = I2C_ADDR,

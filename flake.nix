@@ -25,10 +25,10 @@
               zig
               zls
               clang-tools
+              bear
 
               gnumake
               python39
-              bear
               gcc-arm-embedded
               poetry
               cacert
