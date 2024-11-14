@@ -93,8 +93,13 @@ pub fn build(b: *std.Build) !void {
         .name = "main",
     });
 
-    apExe.root_module.addImport("msdk", msdk.createModule());
-    compExe.root_module.addImport("msdk", msdk.createModule());
+    const sharedModule = b.createModule(.{
+        .root_source_file = b.path("shared/main.zig"),
+    });
+    sharedModule.addImport("msdk", msdk.createModule());
+
+    apExe.root_module.addImport("shared", sharedModule);
+    compExe.root_module.addImport("shared", sharedModule);
 
     if (std.fs.cwd().openFile(b.pathFromRoot("application_processor/inc/ectf_params.h"), .{})) |_| {
         const params = b.addTranslateC(.{

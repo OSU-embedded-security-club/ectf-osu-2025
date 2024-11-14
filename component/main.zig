@@ -1,5 +1,6 @@
 const std = @import("std");
-const msdk = @import("msdk");
+const shared = @import("shared");
+const msdk = shared.msdk;
 const params = @import("params");
 
 /// Entrypoint for the application processor
@@ -7,6 +8,8 @@ pub export fn main() noreturn {
     _ = msdk.LED_Init();
     msdk.LED_Off(msdk.LED1);
     msdk.LED_Off(msdk.LED2);
+
+    shared.sayHi();
 
     while (true) {
         for (0..3) |_| {

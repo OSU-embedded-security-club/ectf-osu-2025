@@ -4,11 +4,14 @@ const std = @import("std");
 //     @cInclude("ectf_params.h");
 // });
 
-const msdk = @import("msdk");
 const params = @import("params");
+const shared = @import("shared");
+const msdk = shared.msdk;
 
 /// Entrypoint for the application processor
 pub export fn main() noreturn {
+    shared.sayHi();
+
     _ = msdk.LED_Init();
     initI2C() catch {
         msdk.LED_On(msdk.LED1);
