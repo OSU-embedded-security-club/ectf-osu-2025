@@ -1,8 +1,20 @@
 const std = @import("std");
+
+/// Maxim's C SDK for the MAX78000 microcontroller automattically translated to Zig
 pub const msdk = @import("msdk");
 
 const WriteError = error{};
 
+/// Used to override Zig's default log function to work on the embedded, `freestanding` platform. Normally, Zig has a hard dependency on posix.
+///
+/// ```zig
+/// const shared = @import("shared");
+///
+/// // set the `std_options` global to bind this custom log function
+/// pub const std_options = .{
+///   .logFn = shared.usb_log,
+/// };
+/// ```
 pub fn usb_log(comptime level: std.log.Level, comptime scope: @TypeOf(.EnumLiteral), comptime format: []const u8, args: anytype) void {
     const scope_name = @tagName(scope);
     const level_name = level.asText();
@@ -20,4 +32,16 @@ fn usb_print(_: void, text: []const u8) WriteError!usize {
         _ = msdk.putchar(b);
     }
     return text.len;
+}
+
+/// Does cool stuff
+pub fn hi() i32 {
+    std.debug.print("Hello, world!\n", .{});
+    return 1;
+}
+
+test "one" {
+    const a = hi();
+    const b = 2;
+    try std.testing.expectEqual(a + b, 3);
 }

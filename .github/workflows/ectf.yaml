@@ -2,6 +2,8 @@ name: eCTF
 on:
   pull_request:
   push:
+    branches:
+      - main
 jobs:
   ap:
     name: Build AP firmware

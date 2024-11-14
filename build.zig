@@ -148,14 +148,14 @@ pub fn build(b: *std.Build) !void {
 
     const test_step = b.step("test", "Run unit tests");
     const unit_tests = b.addTest(.{
-        .root_source_file = b.path("test.zig"),
+        .root_source_file = b.path("shared/main.zig"),
         .target = b.resolveTargetQuery(.{}),
     });
     const run_unit_tests = b.addRunArtifact(unit_tests);
     test_step.dependOn(&run_unit_tests.step);
 
     const install_docs = b.addInstallDirectory(.{
-        .source_dir = apExe.getEmittedDocs(),
+        .source_dir = unit_tests.getEmittedDocs(),
         .install_dir = .{ .custom = ".." },
         .install_subdir = "docs",
     });
