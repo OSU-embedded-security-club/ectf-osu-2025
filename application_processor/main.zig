@@ -16,7 +16,7 @@ pub const os = struct {
 
 /// Entrypoint for the application processor
 pub export fn main() noreturn {
-    _ = msdk.printf("Initializing AP\n");
+    std.log.info("Initializing AP", .{});
     _ = msdk.LED_Init();
 
     var gpa = std.heap.GeneralPurposeAllocator(.{ .enable_memory_limit = true }){

@@ -92,6 +92,7 @@ pub fn build(b: *std.Build) !void {
         .single_threaded = true,
         .target = target,
         .name = "main",
+        .link_libc = true,
     });
 
     const sharedModule = b.createModule(.{
