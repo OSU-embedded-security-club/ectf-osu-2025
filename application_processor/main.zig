@@ -19,42 +19,12 @@ pub export fn main() noreturn {
     _ = msdk.printf("Initializing AP\n");
     _ = msdk.LED_Init();
 
-    // _ = std.heap.c_allocator;
-    // var gpa = @import("gpa.zig").GeneralPurposeAllocator(.{
-    //     .enable_memory_limit = true,
-    // }){
-    //     .requested_memory_limit = 0x00020000,
-    // };
-    // const ptr = @as([*]u8, @ptrFromInt(0x20000000));
-    // const heap = ptr[0..0x00020000];
-    // var fba = std.heap.FixedBufferAllocator.init(heap);
-    // const fba_allocator = fba.allocator();
-    // const gpa_t = std.heap.GeneralPurposeAllocator(.{
-    //     .enable_memory_limit = true,
-    //     .thread_safe = false,
-    // });
-    // const MemoryPool = @TypeOf(@field(@as(gpa_t, undefined), "bucket_node_pool"));
-    // var gpa = gpa_t{
-    //     .backing_allocator = c_allocator,
-    //     .bucket_node_pool = MemoryPool.init(c_allocator),
-    //     .requested_memory_limit = 0x00020000,
-    // };
-    // _ = gpa;
-    // _ = gpa.allocator();
-
     var gpa = std.heap.GeneralPurposeAllocator(.{ .enable_memory_limit = true }){
         .requested_memory_limit = 0x0001e000,
     };
     const allocator = gpa.allocator();
-    _ = allocator.alloc(i32, 10) catch unreachable;
-
-    // const x: u128 = 2;
-    // const y: u128 = 2;
-    // const z = x * y;
-    // std.log.info("{}", .{z});
-
-    // _ = std.fmt.allocPrintZ(allocator, "{any} {s}", .{ 3, "hi" }) catch unreachable;
-    // _ = msdk.printf("buf: %s\n", buf.ptr);
+    const arr = allocator.alloc(i32, 10) catch unreachable;
+    std.log.info("{any}", .{arr});
 
     initI2C() catch {
         msdk.LED_On(msdk.LED1);
@@ -72,25 +42,19 @@ pub export fn main() noreturn {
 
     var n: usize = 0;
     while (true) : (n += 1) {
-        std.log.info("2 + 3 = {any}", .{2 + 3});
         msdk.LED_Off(msdk.LED3);
         msdk.LED_On(msdk.LED1);
-        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
+        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(200));
         msdk.LED_Off(msdk.LED1);
         msdk.LED_On(msdk.LED2);
-        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
+        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(200));
         msdk.LED_Off(msdk.LED2);
         msdk.LED_On(msdk.LED3);
-        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
+        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(200));
 
-        // if (n % @as(usize, 10) == 0) {
-        //     _ = msdk.printf("Total requested bytes: %d\n", gpa.total_requested_bytes);
-        // }
-
-        // if (gpa.detectLeaks()) {
-        //     _ = msdk.printf("Memory leak detected!\n");
-        //     continue;
-        // }
+        if (n % @as(usize, 10) == 0) {
+            _ = msdk.printf("Total requested bytes: %d\n", gpa.total_requested_bytes);
+        }
     }
 }
 
