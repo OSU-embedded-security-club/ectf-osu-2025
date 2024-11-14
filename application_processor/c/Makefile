@@ -242,7 +242,7 @@ endif
 MXC_OPTIMIZE_CFLAGS ?= -O2
 
 # Set compiler flags
-PROJ_CFLAGS += -Wall # Enable warnings
+PROJ_CFLAGS += -Dzig_has_int128=0 # Enable warnings
 
 ifeq ($(POST_BOOT_ENABLED), 1)
 	PROJ_CFLAGS += -DPOST_BOOT=$(POST_BOOT_CODE)

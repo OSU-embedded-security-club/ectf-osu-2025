@@ -84,6 +84,7 @@ pub fn build(b: *std.Build) !void {
         .single_threaded = true,
         .target = target,
         .name = "main",
+        .link_libc = true,
     });
 
     const compExe = b.addExecutable(.{
@@ -131,7 +132,7 @@ pub fn build(b: *std.Build) !void {
 
     const lib_dir_step = try ZigLibDir.create(b);
     apStep.dependOn(&lib_dir_step.step);
-    apStep.dependOn(&b.addInstallFile(lib_dir_step.getLibPath().path(b, "zig.h"), "../application_processor/c/src/zig.h").step);
+    // apStep.dependOn(&b.addInstallFile(lib_dir_step.getLibPath().path(b, "zig.h"), "../application_processor/c/src/zig.h").step);
     compStep.dependOn(&b.addInstallFile(lib_dir_step.getLibPath().path(b, "zig.h"), "../component/c/src/zig.h").step);
 
     apStep.dependOn(&b.addInstallFile(msdk.getOutput(), "msdk.zig").step);
