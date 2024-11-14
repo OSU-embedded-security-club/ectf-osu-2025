@@ -7,9 +7,23 @@ pub const std_options = .{
     .logFn = shared.usb_log,
 };
 
-/// Entrypoint for the application processor
+pub const os = struct {
+    pub const heap = struct {
+        pub const page_allocator = std.heap.c_allocator;
+    };
+};
+
+/// Entrypoint for the component
 pub export fn main() noreturn {
+    std.log.info("Initializing Component", .{});
     _ = msdk.LED_Init();
+
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .enable_memory_limit = true }){
+        .requested_memory_limit = 0x0001e000,
+    };
+    const allocator = gpa.allocator();
+    _ = allocator;
+
     msdk.LED_Off(msdk.LED1);
     msdk.LED_Off(msdk.LED2);
 
