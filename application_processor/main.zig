@@ -8,10 +8,12 @@ const params = @import("params");
 const shared = @import("shared");
 const msdk = shared.msdk;
 
+pub const std_options = .{
+    .logFn = shared.usb_log,
+};
+
 /// Entrypoint for the application processor
 pub export fn main() noreturn {
-    shared.sayHi();
-
     _ = msdk.LED_Init();
     initI2C() catch {
         msdk.LED_On(msdk.LED1);
@@ -30,6 +32,7 @@ pub export fn main() noreturn {
     msdk.LED_Off(msdk.LED2);
 
     while (true) {
+        std.log.info("2 + 2 = {any}", .{2 + 2});
         msdk.LED_Off(msdk.LED3);
         msdk.LED_On(msdk.LED1);
         _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
