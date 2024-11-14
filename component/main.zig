@@ -14,7 +14,6 @@ pub export fn main() noreturn {
     msdk.LED_Off(msdk.LED2);
 
     while (true) {
-        shared.usb_log(.info, .idk, "Hello from log?", .{});
         for (0..3) |_| {
             msdk.LED_On(msdk.LED2);
             _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(500 / 3));

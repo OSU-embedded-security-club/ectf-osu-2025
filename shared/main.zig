@@ -8,7 +8,7 @@ pub fn usb_log(comptime level: std.log.Level, comptime scope: @TypeOf(.EnumLiter
     const level_name = level.asText();
     try usb_writer.print("[{s}] ({s}): ", .{ level_name, scope_name });
     try usb_writer.print(format, args);
-    try usb_writer.print("\n", args);
+    try usb_writer.print("\n", .{});
 }
 
 const usb_writer: std.io.GenericWriter(void, WriteError, usb_print) = .{
