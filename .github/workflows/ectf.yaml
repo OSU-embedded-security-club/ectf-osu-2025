@@ -1,9 +1,14 @@
 name: eCTF
 on:
   pull_request:
+  workflow_dispatch:
   push:
     branches:
       - main
+
+permissions:
+  contents: write
+
 jobs:
   ap:
     name: Build AP firmware
@@ -20,6 +25,12 @@ jobs:
     - name: Compile firmware
       run: ./compile_ap.sh
 
+    - name: Create artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ap.img
+        path: ap.img
+
   comp:
     name: Build Component firmware
     runs-on: ubuntu-latest
@@ -34,4 +45,38 @@ jobs:
 
     - name: Compile firmware
       run: ./compile_comp.sh
-  
+
+    - name: Create artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: comp.img
+        path: comp.img
+
+  release:
+    name: Release firmware
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: [ap, comp]
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/download-artifact@v4
+      with:
+        name: ap.img
+    
+    - uses: actions/download-artifact@v4
+      with:
+        name: comp.img
+
+    - name: Get tag name
+      id: tag-name
+      run: |
+        echo "tagname=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+    - name: Release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release create ${{ steps.tag-name.outputs.tagname }} -t "firmware" -n "Firmware release (${{ steps.tag-name.outputs.tagname }})"
+        gh release upload ${{ steps.tag-name.outputs.tagname }} ap.img
+        gh release upload ${{ steps.tag-name.outputs.tagname }} comp.img
