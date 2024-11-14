@@ -2,3 +2,6 @@
 /application_processor/c/Makefile linguist-vendored=true
 /application_processor/c/project.mk linguist-vendored=true
 /application_processor/c/startup_firmware.S linguist-vendored=true
+/component/c/Makefile linguist-vendored=true
+/component/c/project.mk linguist-vendored=true
+/component/c/startup_firmware.S linguist-vendored=true
