@@ -2,7 +2,9 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) !void {
     const apStep = b.step("application-processor", "Build the application processor");
+    const compStep = b.step("component", "Build the component");
     b.default_step.dependOn(apStep);
+    b.default_step.dependOn(compStep);
 
     const target = b.resolveTargetQuery(.{
         .cpu_arch = .thumb,
@@ -77,14 +79,22 @@ pub fn build(b: *std.Build) !void {
 
     msdk.defineCMacroRaw("__PROGRAM_START");
 
-    const exe = b.addExecutable(.{
+    const apExe = b.addExecutable(.{
         .root_source_file = b.path("application_processor/main.zig"),
         .single_threaded = true,
         .target = target,
         .name = "main",
     });
 
-    exe.root_module.addImport("msdk", msdk.createModule());
+    const compExe = b.addExecutable(.{
+        .root_source_file = b.path("component/main.zig"),
+        .single_threaded = true,
+        .target = target,
+        .name = "main",
+    });
+
+    apExe.root_module.addImport("msdk", msdk.createModule());
+    compExe.root_module.addImport("msdk", msdk.createModule());
 
     if (std.fs.cwd().openFile(b.pathFromRoot("application_processor/inc/ectf_params.h"), .{})) |_| {
         const params = b.addTranslateC(.{
@@ -93,20 +103,37 @@ pub fn build(b: *std.Build) !void {
             .optimize = .ReleaseSafe,
             .link_libc = false,
         });
-        exe.root_module.addImport("params", params.createModule());
+        apExe.root_module.addImport("params", params.createModule());
     } else |_| {
-        exe.root_module.addAnonymousImport("params", .{
-            .root_source_file = b.path("default_params.zig"),
+        apExe.root_module.addAnonymousImport("params", .{
+            .root_source_file = b.path("application_processor/default_params.zig"),
+        });
+    }
+
+    if (std.fs.cwd().openFile(b.pathFromRoot("component/inc/ectf_params.h"), .{})) |_| {
+        const params = b.addTranslateC(.{
+            .root_source_file = b.path("component/inc/ectf_params.h"),
+            .target = target,
+            .optimize = .ReleaseSafe,
+            .link_libc = false,
+        });
+        compExe.root_module.addImport("params", params.createModule());
+    } else |_| {
+        compExe.root_module.addAnonymousImport("params", .{
+            .root_source_file = b.path("component/default_params.zig"),
         });
     }
 
     const lib_dir_step = try ZigLibDir.create(b);
     apStep.dependOn(&lib_dir_step.step);
     apStep.dependOn(&b.addInstallFile(lib_dir_step.getLibPath().path(b, "zig.h"), "../application_processor/c/src/zig.h").step);
+    compStep.dependOn(&b.addInstallFile(lib_dir_step.getLibPath().path(b, "zig.h"), "../component/c/src/zig.h").step);
 
     apStep.dependOn(&b.addInstallFile(msdk.getOutput(), "msdk.zig").step);
+    compStep.dependOn(&b.addInstallFile(msdk.getOutput(), "msdk.zig").step);
 
-    apStep.dependOn(&b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .{ .custom = "../application_processor/c/src" } } }).step);
+    apStep.dependOn(&b.addInstallArtifact(apExe, .{ .dest_dir = .{ .override = .{ .custom = "../application_processor/c/src" } } }).step);
+    compStep.dependOn(&b.addInstallArtifact(compExe, .{ .dest_dir = .{ .override = .{ .custom = "../component/c/src" } } }).step);
 
     const test_step = b.step("test", "Run unit tests");
     const unit_tests = b.addTest(.{
@@ -117,15 +144,18 @@ pub fn build(b: *std.Build) !void {
     test_step.dependOn(&run_unit_tests.step);
 
     const install_docs = b.addInstallDirectory(.{
-        .source_dir = exe.getEmittedDocs(),
+        .source_dir = apExe.getEmittedDocs(),
         .install_dir = .{ .custom = ".." },
         .install_subdir = "docs",
     });
     const docs_step = b.step("docs", "Generate documentation");
     docs_step.dependOn(&install_docs.step);
 
-    apStep.dependOn(&exe.step);
+    apStep.dependOn(&apExe.step);
     apStep.dependOn(&msdk.step);
+
+    compStep.dependOn(&compExe.step);
+    compStep.dependOn(&msdk.step);
 }
 
 const ZigLibDir = struct {
