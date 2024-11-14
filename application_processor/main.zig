@@ -44,16 +44,16 @@ pub export fn main() noreturn {
     while (true) : (n += 1) {
         msdk.LED_Off(msdk.LED3);
         msdk.LED_On(msdk.LED1);
-        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(200));
+        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
         msdk.LED_Off(msdk.LED1);
         msdk.LED_On(msdk.LED2);
-        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(200));
+        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
         msdk.LED_Off(msdk.LED2);
         msdk.LED_On(msdk.LED3);
-        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(200));
+        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
 
         if (n % @as(usize, 10) == 0) {
-            _ = msdk.printf("Total requested bytes: %d\n", gpa.total_requested_bytes);
+            std.log.info("Total requested bytes: {}", .{gpa.total_requested_bytes});
         }
     }
 }
