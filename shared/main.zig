@@ -45,3 +45,28 @@ test "one" {
     const b = 2;
     try std.testing.expectEqual(a + b, 3);
 }
+
+///
+/// See Libraries/PeriphDrivers/MAX78000/mxc_errors.h
+///
+const MXCErrors = enum(c_int) {
+    E_NO_ERROR = 0,
+    E_SUCCESS = 0,
+    E_NULL_PTR = -1,
+    E_BAD_PARAM = -3,
+    E_INVALID = -4,
+    E_UNINITIALIZED = -5,
+    E_BUSY = -6,
+    E_BAD_STATE = -7,
+    E_UNKNOWN = -8,
+    E_COMM_ERR = -9,
+    E_TIME_OUT = -10,
+    E_NO_RESPONSE = -11,
+    E_OVERFLOW = -12,
+    E_UNDERFLOW = -13,
+    E_NONE_AVAIL = -14,
+    E_SHUTDOWN = -15,
+    E_ABORT = -16,
+    E_NOT_SUPPORTED = -17,
+    E_FAIL = -255,
+};
