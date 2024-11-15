@@ -13,12 +13,13 @@ const Flags = packed struct {
 
 // Simple packet structure with checksum
 pub const Packet = extern struct {
+    const data_size = 114;
     seq_num: u32 align(1),
     ack_num: u32 align(1),
     flags: Flags align(1),
     checksum: u32 align(1),
     data_len: u8 align(1),
-    data: [114]u8 align(1),
+    data: [data_size]u8 align(1),
 
     pub fn init() Packet {
         return .{
@@ -26,7 +27,7 @@ pub const Packet = extern struct {
             .ack_num = 0,
             .flags = .{ .is_ack = false },
             .checksum = 0,
-            .data = [_]u8{0} ** 114,
+            .data = [_]u8{0} ** data_size,
             .data_len = 0,
         };
     }
@@ -91,7 +92,10 @@ pub fn Connection(comptime ChannelImpl: type) type {
 
         pub fn send(self: *Self, data: anytype) !void {
             const bytes = std.mem.toBytes(data);
-            try self.sendBytes(&bytes);
+            var iter = std.mem.window(u8, &bytes, Packet.data_size, Packet.data_size);
+            while (iter.next()) |chunk| {
+                try self.sendBytes(chunk);
+            }
         }
 
         fn sendBytes(self: *Self, data: []const u8) !void {
@@ -146,7 +150,8 @@ pub fn Connection(comptime ChannelImpl: type) type {
                     self.buffer = newBuffer;
 
                     if (packet_struct.verifyChecksum()) {
-                        if (try self.recvPacket(&packet_struct)) |packet_data| {
+                        const maybe_packet = self.recvPacket(&packet_struct) catch return null;
+                        if (maybe_packet) |packet_data| {
                             try self.recvbuffer.appendSlice(packet_data);
                             if (self.recvbuffer.items.len >= @sizeOf(T)) {
                                 const t: *T = @ptrCast(self.recvbuffer.items[0..@sizeOf(T)].ptr);
@@ -215,6 +220,10 @@ const MyObject = extern struct {
     hello: u32 align(1),
 };
 
+const BigObject = extern struct {
+    hello: [Packet.data_size + 1]u8 align(1),
+};
+
 test "connection" {
     std.debug.print("connection\n", .{});
     const mock = layer3.MockChannel.init(std.testing.allocator, 80, false) catch unreachable;
@@ -256,6 +265,30 @@ test "connection over unreliable channel" {
     defer conn2.deinit();
     var obj2 = try conn2.recv(MyObject);
     while (obj2 == null) : (obj2 = try conn2.recv(MyObject)) {
+        try conn1.handleRetransmissions();
+    }
+    const cobj2 = obj2.?;
+    defer cobj2.deinit();
+    try std.testing.expectEqualDeep(obj1, cobj2.inner.*);
+}
+
+test "big T" {
+    std.debug.print("connection\n", .{});
+    const mock = layer3.MockChannel.init(std.testing.allocator, 80, false) catch unreachable;
+    defer mock.deinit();
+    const channel = layer3.Channel(mock);
+
+    const addr = layer3.Address.from(11);
+
+    const obj1: BigObject = undefined;
+    var conn1 = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
+    defer conn1.deinit();
+    try conn1.send(obj1);
+
+    var conn2 = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
+    defer conn2.deinit();
+    var obj2 = try conn2.recv(BigObject);
+    while (obj2 == null) : (obj2 = try conn2.recv(BigObject)) {
         try conn1.handleRetransmissions();
     }
     const cobj2 = obj2.?;
