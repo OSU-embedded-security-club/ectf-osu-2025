@@ -3,7 +3,11 @@ const std = @import("std");
 /// Maxim's C SDK for the MAX78000 microcontroller automattically translated to Zig
 pub const msdk = @import("msdk");
 
-const WriteError = error{};
+pub const layer3 = @import("layer3.zig");
+
+comptime {
+    _ = layer3;
+}
 
 /// Used to override Zig's default log function to work on the embedded, `freestanding` platform. Normally, Zig has a hard dependency on posix.
 ///
@@ -23,6 +27,8 @@ pub fn usb_log(comptime level: std.log.Level, comptime scope: @TypeOf(.EnumLiter
     try usb_writer.print("\n", .{});
 }
 
+const WriteError = error{};
+
 const usb_writer: std.io.GenericWriter(void, WriteError, usb_print) = .{
     .context = undefined,
 };
@@ -34,16 +40,26 @@ fn usb_print(_: void, text: []const u8) WriteError!usize {
     return text.len;
 }
 
-/// Does cool stuff
-pub fn hi() i32 {
-    std.debug.print("Hello, world!\n", .{});
-    return 1;
+/// An allocated value and its `deinit` function
+pub fn Owned(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        inner: T,
+        allocator: std.mem.Allocator,
+
+        pub fn deinit(self: Self) void {
+            self.allocator.free(self.inner);
+        }
+    };
 }
 
-test "one" {
-    const a = hi();
-    const b = 2;
-    try std.testing.expectEqual(a + b, 3);
+/// `inner` must have been allocated with `allocator.create`
+pub fn toOwned(inner: anytype, allocator: std.mem.Allocator) Owned(@TypeOf(inner)) {
+    return .{
+        .inner = inner,
+        .allocator = allocator,
+    };
 }
 
 ///

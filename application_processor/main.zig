@@ -4,7 +4,7 @@ const params = @import("params");
 const shared = @import("shared");
 const msdk = shared.msdk;
 
-pub const std_options = .{
+pub const std_options: std.Options = .{
     .logFn = shared.usb_log,
 };
 
