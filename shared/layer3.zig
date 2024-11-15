@@ -17,6 +17,7 @@ pub const Address = enum(u10) {
 
 pub const ChannelError = error{
     SendFailed,
+    // SendTooBig,
     RecvFailed,
 } || std.mem.Allocator.Error;
 
@@ -32,7 +33,9 @@ pub fn ChannelInner(comptime T: type) type {
             try self.inner.send(data, to);
         }
 
-        /// Receive data from an address. Returns `null` if no data is available.
+        /// Receive data from an address. Returns `null` if no data is available. The returned buffer
+        /// is not guaranteed to be full remaining contents of the channel, and further data may be
+        /// available with subsequent calls to `recv`.
         pub inline fn recv(self: Self, from: Address) ChannelError!?Owned([]const u8) {
             return try self.inner.recv(from);
         }
@@ -51,14 +54,22 @@ pub const MockChannel = struct {
     buffers: *std.AutoHashMap(Address, std.ArrayList(u8)),
     recv_buffer_size: usize,
 
-    pub fn init(allocator: std.mem.Allocator, recv_buffer_size: usize) !Self {
+    unreliable: bool,
+    n: *usize,
+
+    pub fn init(allocator: std.mem.Allocator, recv_buffer_size: usize, unreliable: bool) !Self {
         const buffers = try allocator.create(std.AutoHashMap(Address, std.ArrayList(u8)));
         buffers.* = std.AutoHashMap(Address, std.ArrayList(u8)).init(allocator);
+
+        const n = try allocator.create(usize);
+        n.* = 0;
 
         return Self{
             .recv_buffer_size = recv_buffer_size,
             .allocator = allocator,
             .buffers = buffers,
+            .unreliable = unreliable,
+            .n = n,
         };
     }
 
@@ -70,16 +81,35 @@ pub const MockChannel = struct {
 
         self.buffers.deinit();
         self.allocator.destroy(self.buffers);
+        self.allocator.destroy(self.n);
     }
 
     pub fn send(self: Self, data: []const u8, to: Address) ChannelError!void {
+        // if (data.len > self.recv_buffer_size) {
+        //     return ChannelError.SendTooBig;
+        // }
         if (self.buffers.getPtr(to)) |buffer| {
             try buffer.appendSlice(data);
         } else {
-            var list = std.ArrayList(u8).init(self.allocator);
-            errdefer list.deinit();
-            try list.appendSlice(data);
-            try self.buffers.put(to, list);
+            var buffer = std.ArrayList(u8).init(self.allocator);
+            errdefer buffer.deinit();
+            try buffer.appendSlice(data);
+            try self.buffers.put(to, buffer);
+        }
+
+        self.messWithData();
+    }
+
+    fn messWithData(self: Self) void {
+        if (self.unreliable) {
+            var iter = self.buffers.valueIterator();
+            while (iter.next()) |buffer| {
+                if (self.n.* % 2 == 0) {
+                    buffer.items[buffer.items.len / 2] += 7;
+                }
+            }
+
+            self.n.* += 1;
         }
     }
 
@@ -106,7 +136,7 @@ pub const MockChannel = struct {
 };
 
 test "basic channel" {
-    const mock = MockChannel.init(std.testing.allocator, 80) catch unreachable;
+    const mock = MockChannel.init(std.testing.allocator, 80, false) catch unreachable;
     defer mock.deinit();
     const channel = Channel(mock);
 
@@ -122,7 +152,7 @@ test "basic channel" {
 
 test "channel large buffer" {
     const recv_buffer_size = 80;
-    const mock = try MockChannel.init(std.testing.allocator, recv_buffer_size);
+    const mock = try MockChannel.init(std.testing.allocator, recv_buffer_size, false);
     defer mock.deinit();
     const channel = Channel(mock);
 
@@ -142,7 +172,7 @@ test "channel large buffer" {
 }
 
 test "channel multiple addresses" {
-    const mock = MockChannel.init(std.testing.allocator, 80) catch unreachable;
+    const mock = MockChannel.init(std.testing.allocator, 80, false) catch unreachable;
     defer mock.deinit();
     const channel = Channel(mock);
 
@@ -165,7 +195,7 @@ test "channel multiple addresses" {
 }
 
 test "channel recv nothing" {
-    const mock = MockChannel.init(std.testing.allocator, 80) catch unreachable;
+    const mock = MockChannel.init(std.testing.allocator, 80, false) catch unreachable;
     defer mock.deinit();
     const channel = Channel(mock);
 
@@ -176,7 +206,7 @@ test "channel recv nothing" {
 }
 
 test "channel send nothing" {
-    const mock = MockChannel.init(std.testing.allocator, 80) catch unreachable;
+    const mock = MockChannel.init(std.testing.allocator, 80, false) catch unreachable;
     defer mock.deinit();
     const channel = Channel(mock);
 
@@ -185,4 +215,29 @@ test "channel send nothing" {
     const data = ([_]u8{})[0..0];
     try std.testing.expectEqual(0, data.len);
     try channel.send(data, addr);
+}
+
+test "unreliable channel" {
+    const recv_buffer_size = 80;
+    const mock = MockChannel.init(std.testing.allocator, recv_buffer_size, true) catch unreachable;
+    defer mock.deinit();
+    const channel = Channel(mock);
+
+    const addrA = Address.from(11);
+
+    const data = try std.testing.allocator.alloc(u8, recv_buffer_size * 10);
+    defer std.testing.allocator.free(data);
+    try channel.send(data, addrA);
+
+    var unequal = false;
+    for (0..10) |_| {
+        const recv = (try channel.recv(addrA)).?;
+        defer recv.deinit();
+        unequal = !std.mem.eql(u8, data[0..recv_buffer_size], recv.inner);
+        if (unequal) {
+            break;
+        }
+    }
+
+    try std.testing.expect(unequal);
 }

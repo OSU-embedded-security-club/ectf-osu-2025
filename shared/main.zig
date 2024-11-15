@@ -4,9 +4,11 @@ const std = @import("std");
 pub const msdk = @import("msdk");
 
 pub const layer3 = @import("layer3.zig");
+pub const layer4 = @import("layer4.zig");
 
 comptime {
     _ = layer3;
+    _ = layer4;
 }
 
 /// Used to override Zig's default log function to work on the embedded, `freestanding` platform. Normally, Zig has a hard dependency on posix.
@@ -49,12 +51,21 @@ pub fn Owned(comptime T: type) type {
         allocator: std.mem.Allocator,
 
         pub fn deinit(self: Self) void {
-            self.allocator.free(self.inner);
+            switch (@typeInfo(T)) {
+                .Array => self.allocator.free(self.inner),
+                .Vector => self.allocator.free(self.inner),
+                .Pointer => |info| switch (info.size) {
+                    .One => self.allocator.destroy(self.inner),
+                    .Many, .C, .Slice => self.allocator.free(self.inner),
+                },
+                .Struct => self.inner.deinit(),
+                else => unreachable,
+            }
         }
     };
 }
 
-/// `inner` must have been allocated with `allocator.create`
+/// `inner` must have been allocated with `allocator`
 pub fn toOwned(inner: anytype, allocator: std.mem.Allocator) Owned(@TypeOf(inner)) {
     return .{
         .inner = inner,
