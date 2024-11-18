@@ -165,8 +165,8 @@ const MockChannelSimplex = struct {
         if (self.unreliable) {
             var iter = self.sendBuffer.valueIterator();
             while (iter.next()) |buffer| {
-                if (self.n.* % 2 == 0) {
-                    buffer.items[buffer.items.len / 2] += 7;
+                if (self.n.* % 3 == 0) {
+                    buffer.items[buffer.items.len / 2] /= 2;
                 }
             }
 
