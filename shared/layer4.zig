@@ -96,6 +96,8 @@ pub fn Connection(comptime ChannelImpl: type) type {
             while (iter.next()) |chunk| {
                 try self.sendBytes(chunk);
             }
+
+            try self.handleRetransmissions();
         }
 
         fn sendBytes(self: *Self, data: []const u8) !void {
@@ -134,8 +136,8 @@ pub fn Connection(comptime ChannelImpl: type) type {
             });
         }
 
-        pub fn recv(self: *Self, comptime T: type) !?Owned(*T) {
-            if (try self.channel.recv(self.address)) |data| {
+        pub fn recv(self: *Self, comptime T: type) !Owned(*T) {
+            while (try self.channel.recv(self.address)) |data| {
                 errdefer data.deinit();
                 try self.buffer.appendSlice(data.inner);
                 data.deinit();
@@ -144,15 +146,18 @@ pub fn Connection(comptime ChannelImpl: type) type {
                     const packet_pointer: *Packet = @ptrCast(packet.ptr);
                     var packet_struct = packet_pointer.*;
 
+                    std.debug.print("recv -> {any}\n", .{self.buffer.items.len});
+
                     var newBuffer = std.ArrayList(u8).init(self.allocator);
                     try newBuffer.appendSlice(self.buffer.items[@sizeOf(Packet)..]);
                     self.buffer.deinit();
                     self.buffer = newBuffer;
 
                     if (packet_struct.verifyChecksum()) {
-                        const maybe_packet = self.recvPacket(&packet_struct) catch return null;
+                        const maybe_packet = self.recvPacket(&packet_struct) catch continue;
                         if (maybe_packet) |packet_data| {
                             try self.recvbuffer.appendSlice(packet_data);
+                            std.debug.print("recv items len: {}\n", .{self.recvbuffer.items.len});
                             if (self.recvbuffer.items.len >= @sizeOf(T)) {
                                 const t: *T = @ptrCast(self.recvbuffer.items[0..@sizeOf(T)].ptr);
                                 const result = try self.allocator.create(T);
@@ -163,15 +168,13 @@ pub fn Connection(comptime ChannelImpl: type) type {
                                 try newRecvBuffer.appendSlice(self.recvbuffer.items[@sizeOf(T)..]);
                                 self.recvbuffer.deinit();
                                 self.recvbuffer = newRecvBuffer;
-
                                 return toOwned(result, self.allocator);
                             }
                         }
                     }
                 }
             }
-
-            return null;
+            return error.RecvFailed;
         }
 
         fn recvPacket(self: *Self, packet: *Packet) !?[]const u8 {
@@ -196,20 +199,23 @@ pub fn Connection(comptime ChannelImpl: type) type {
         }
 
         pub fn handleRetransmissions(self: *Self) !void {
-            const current_time = std.time.milliTimestamp();
             const timeout = 1000;
             const max_retries = 5;
 
-            var i: usize = 0;
-            while (i < self.unacked_packets.items.len) : (i += 1) {
-                var unacked = &self.unacked_packets.items[i];
-                if (current_time - unacked.last_sent > timeout) {
-                    if (unacked.retries >= max_retries) {
-                        return error.MaxRetriesExceeded;
+            while (self.unacked_packets.items.len > 0) {
+                const current_time = std.time.milliTimestamp();
+                var i: usize = 0;
+                while (i < self.unacked_packets.items.len) : (i += 1) {
+                    var unacked = &self.unacked_packets.items[i];
+
+                    if (current_time - unacked.last_sent > timeout) {
+                        if (unacked.retries >= max_retries) {
+                            return error.MaxRetriesExceeded;
+                        }
+                        try self.sendPacket(&unacked.packet);
+                        unacked.last_sent = current_time;
+                        unacked.retries += 1;
                     }
-                    try self.sendPacket(&unacked.packet);
-                    unacked.last_sent = current_time;
-                    unacked.retries += 1;
                 }
             }
         }
@@ -224,6 +230,10 @@ const BigObject = extern struct {
     hello: [Packet.data_size + 1]u8 align(1),
 };
 
+pub fn send_thread_shim(data: anytype) void {
+    data.conn.send(data.obj) catch @panic("cant send data");
+}
+
 test "connection" {
     std.debug.print("connection\n", .{});
     const mock = layer3.MockChannel.init(std.testing.allocator, 80, false) catch unreachable;
@@ -235,17 +245,24 @@ test "connection" {
     const obj1 = MyObject{ .hello = 123 };
     var conn1 = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
     defer conn1.deinit();
-    try conn1.send(obj1);
+
+    const ThreadData = struct {
+        conn: Connection(@TypeOf(channel)),
+        obj: MyObject,
+    };
+    const thread_data = try std.testing.allocator.create(ThreadData);
+    defer std.testing.allocator.destroy(thread_data);
+    thread_data.* = .{ .conn = conn1, .obj = obj1 };
+    const thread = try std.Thread.spawn(.{}, send_thread_shim, .{thread_data});
+    defer thread.join();
 
     var conn2 = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
     defer conn2.deinit();
-    var obj2 = try conn2.recv(MyObject);
-    while (obj2 == null) : (obj2 = try conn2.recv(MyObject)) {
-        try conn1.handleRetransmissions();
-    }
-    const cobj2 = obj2.?;
-    defer cobj2.deinit();
-    try std.testing.expectEqualDeep(obj1, cobj2.inner.*);
+
+    const obj2 = try conn2.recv(MyObject);
+    defer obj2.deinit();
+
+    try std.testing.expectEqualDeep(obj1, obj2.inner.*);
 }
 
 test "connection over unreliable channel" {
@@ -273,6 +290,30 @@ test "connection over unreliable channel" {
 }
 
 test "big T" {
+    std.debug.print("connection\n", .{});
+    const mock = layer3.MockChannel.init(std.testing.allocator, 80, false) catch unreachable;
+    defer mock.deinit();
+    const channel = layer3.Channel(mock);
+
+    const addr = layer3.Address.from(11);
+
+    const obj1: BigObject = undefined;
+    var conn1 = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
+    defer conn1.deinit();
+    try conn1.send(obj1);
+
+    var conn2 = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
+    defer conn2.deinit();
+    var obj2 = try conn2.recv(BigObject);
+    while (obj2 == null) : (obj2 = try conn2.recv(BigObject)) {
+        try conn1.handleRetransmissions();
+    }
+    const cobj2 = obj2.?;
+    defer cobj2.deinit();
+    try std.testing.expectEqualDeep(obj1, cobj2.inner.*);
+}
+
+test "out of order recv" {
     std.debug.print("connection\n", .{});
     const mock = layer3.MockChannel.init(std.testing.allocator, 80, false) catch unreachable;
     defer mock.deinit();

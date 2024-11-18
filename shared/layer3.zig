@@ -53,6 +53,7 @@ pub const MockChannel = struct {
     allocator: std.mem.Allocator,
     buffers: *std.AutoHashMap(Address, std.ArrayList(u8)),
     recv_buffer_size: usize,
+    mutex: *std.Thread.Mutex,
 
     unreliable: bool,
     n: *usize,
@@ -60,6 +61,9 @@ pub const MockChannel = struct {
     pub fn init(allocator: std.mem.Allocator, recv_buffer_size: usize, unreliable: bool) !Self {
         const buffers = try allocator.create(std.AutoHashMap(Address, std.ArrayList(u8)));
         buffers.* = std.AutoHashMap(Address, std.ArrayList(u8)).init(allocator);
+
+        const mutex = try allocator.create(std.Thread.Mutex);
+        mutex.* = .{};
 
         const n = try allocator.create(usize);
         n.* = 0;
@@ -70,6 +74,7 @@ pub const MockChannel = struct {
             .buffers = buffers,
             .unreliable = unreliable,
             .n = n,
+            .mutex = mutex,
         };
     }
 
@@ -82,12 +87,15 @@ pub const MockChannel = struct {
         self.buffers.deinit();
         self.allocator.destroy(self.buffers);
         self.allocator.destroy(self.n);
+        self.allocator.destroy(self.mutex);
     }
 
     pub fn send(self: Self, data: []const u8, to: Address) ChannelError!void {
         // if (data.len > self.recv_buffer_size) {
         //     return ChannelError.SendTooBig;
         // }
+        self.mutex.lock();
+        defer self.mutex.unlock();
         if (self.buffers.getPtr(to)) |buffer| {
             try buffer.appendSlice(data);
         } else {
@@ -114,6 +122,8 @@ pub const MockChannel = struct {
     }
 
     pub fn recv(self: Self, from: Address) ChannelError!?Owned([]const u8) {
+        self.mutex.lock();
+        defer self.mutex.unlock();
         const buffer = self.buffers.get(from) orelse return null;
 
         const len = @min(self.recv_buffer_size, buffer.items.len);
