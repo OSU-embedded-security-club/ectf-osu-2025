@@ -55,6 +55,7 @@ pub fn Connection(comptime ChannelImpl: type) type {
         const Self = @This();
         const num_unacked_packets = 10;
         const num_retries = 5;
+        const global_timeout = 5 * 1000;
 
         channel: layer3.ChannelInner(ChannelImpl),
         address: layer3.Address,
@@ -94,22 +95,19 @@ pub fn Connection(comptime ChannelImpl: type) type {
                     // if we ware done sending, start a timeout
                     timeout = std.time.milliTimestamp();
                 }
-                // std.debug.print("self.unacked_packet_head - self.unacked_packet_tail = {}\n", .{self.unacked_packet_head - self.unacked_packet_tail});
-                std.debug.print("self.unacked_packet_head = {}, self.unacked_packet_tail = {}\n", .{ self.unacked_packet_head, self.unacked_packet_tail });
                 if (self.unacked_packet_head - self.unacked_packet_tail <= num_unacked_packets) {
                     // only send a chunk if we have room in our unacked packets
                     if (maybe_chunk) |chunk| {
-                        // try self.sendBytes(chunk);
                         var packet = Packet.init();
                         packet.seq_num = self.seq_num;
                         packet.data_len = @intCast(chunk.len);
                         @memcpy(packet.data[0..chunk.len], chunk);
 
-                        self.unacked_packet_head += 1;
                         self.unacked_packets[@mod(self.unacked_packet_head, num_unacked_packets)] = .{
                             .packet = packet,
                             .last_sent = std.time.milliTimestamp(),
                         };
+                        self.unacked_packet_head += 1;
 
                         self.seq_num += 1;
                         try self.sendPacket(&packet);
@@ -129,6 +127,7 @@ pub fn Connection(comptime ChannelImpl: type) type {
                         if (self.unacked_packets[i].packet.seq_num == packet.ack_num) {
                             self.unacked_packets[i] = self.unacked_packets[@mod(self.unacked_packet_tail, num_unacked_packets)];
                             self.unacked_packet_tail += 1;
+                            timeout = std.time.milliTimestamp();
                             break;
                         }
                     }
@@ -136,7 +135,7 @@ pub fn Connection(comptime ChannelImpl: type) type {
 
                 const current_time = std.time.milliTimestamp();
 
-                if (timeout != 0 and current_time - timeout > 1000) {
+                if (timeout != 0 and current_time - timeout > global_timeout) {
                     return;
                 }
 
@@ -144,7 +143,7 @@ pub fn Connection(comptime ChannelImpl: type) type {
                 while (pos < self.unacked_packet_head) : (pos += 1) {
                     const i = @mod(pos, num_unacked_packets);
                     const unacked = &self.unacked_packets[i];
-                    if (current_time - unacked.last_sent > timeout) {
+                    if (current_time - unacked.last_sent > 1000) {
                         if (unacked.retries >= num_retries) {
                             return error.MaxRetriesExceeded;
                         }
@@ -169,8 +168,7 @@ pub fn Connection(comptime ChannelImpl: type) type {
 
             var timeout = std.time.milliTimestamp();
 
-            while (true) {
-                std.time.sleep(1 * 1000);
+            while (remaining > 0) {
                 const currentTime = std.time.milliTimestamp();
                 if (try self.recvPacket()) |packet| {
                     if (packet.flags.is_ack) return error.UnexpectedPacket;
@@ -188,21 +186,16 @@ pub fn Connection(comptime ChannelImpl: type) type {
 
                     @memcpy(result_bytes[offset .. offset + len], packet.data[0..len]);
                     remaining -= 1;
-                    // std.debug.print("remaining {}\n", .{remaining});
-
-                    if (remaining == 0) {
-                        return toOwned(result, self.allocator);
-                    }
 
                     timeout = currentTime;
                 }
 
-                if (currentTime - timeout > 10 * 1000) {
-                    // std.debug.print("currentTime {}\n", .{currentTime});
-                    // std.debug.print("timeout {}\n", .{timeout});
+                if (currentTime - timeout > global_timeout) {
                     return error.Timeout;
                 }
             }
+
+            return toOwned(result, self.allocator);
         }
 
         fn sendPacket(self: *Self, packet: *Packet) !void {
@@ -223,8 +216,6 @@ pub fn Connection(comptime ChannelImpl: type) type {
                 defer data.deinit();
 
                 const remaining_bytes = @sizeOf(Packet) - self.buffer_size;
-                // std.debug.print("remaining_bytes {}\n", .{remaining_bytes});
-                // std.debug.print("data.inner.len < remaining_bytes {}\n", .{data.inner.len < remaining_bytes});
                 if (data.inner.len < remaining_bytes) {
                     @memcpy(self.buffer[self.buffer_size .. self.buffer_size + data.inner.len], data.inner);
                     self.buffer_size += data.inner.len;
@@ -235,13 +226,10 @@ pub fn Connection(comptime ChannelImpl: type) type {
                 const packet_ptr: *Packet = @ptrCast(&self.buffer[0]);
                 const packet = packet_ptr.*;
 
-                // std.debug.print("data.inner.len {}\n", .{data.inner.len});
-                // std.debug.print("remaining_bytes, data.inner.len: {} {}\n", .{ remaining_bytes, data.inner.len });
-                self.buffer_size = 0;
-                @memcpy(self.buffer[0 .. data.inner.len - remaining_bytes], data.inner[remaining_bytes..]);
+                self.buffer_size = data.inner.len - remaining_bytes;
+                @memcpy(self.buffer[0..self.buffer_size], data.inner[remaining_bytes..]);
 
                 if (!packet.verifyChecksum()) return null;
-                // std.debug.print("verified checksum\n", .{});
 
                 return packet;
             }
@@ -250,38 +238,38 @@ pub fn Connection(comptime ChannelImpl: type) type {
     };
 }
 
-const MyObject = extern struct {
-    hello: u32 align(1),
-};
+fn initBytes(num_bytes: comptime_int) [num_bytes]u8 {
+    var result: [num_bytes]u8 = undefined;
+    for (&result, 0..) |*b, i| {
+        b.* = @truncate(i);
+    }
+    return result;
+}
 
-const BigObject = extern struct {
-    hello: [Packet.data_size * 100 + 1]u8 align(1),
-};
+test "connection" {
+    std.debug.print("connection\n", .{});
+    const mocks = try layer3.MockChannel.init(std.testing.allocator, 80, false);
+    defer mocks.deinit();
 
-// test "connection" {
-//     std.debug.print("connection\n", .{});
-//     const mocks = try layer3.MockChannel.init(std.testing.allocator, 80, false);
-//     defer mocks.deinit();
+    const addr = layer3.Address.from(11);
 
-//     const addr = layer3.Address.from(11);
+    const channel1 = layer3.Channel(mocks.to);
+    const obj1 = initBytes(1);
+    var conn1 = Connection(@TypeOf(channel1)).init(std.testing.allocator, channel1, addr);
 
-//     const channel1 = layer3.Channel(mocks.to);
-//     const obj1 = MyObject{ .hello = 123 };
-//     var conn1 = Connection(@TypeOf(channel1)).init(std.testing.allocator, channel1, addr);
+    const thread = try std.Thread.spawn(.{}, struct {
+        fn run(conn: *@TypeOf(conn1), obj: *const @TypeOf(obj1)) void {
+            conn.send(obj.*) catch @panic("a");
+        }
+    }.run, .{ &conn1, &obj1 });
+    defer thread.join();
 
-//     const thread = try std.Thread.spawn(.{}, struct {
-//         fn run(conn: *@TypeOf(conn1)) void {
-//             conn.send(obj1) catch @panic("a");
-//         }
-//     }.run, .{&conn1});
-//     defer thread.join();
-
-//     const channel2 = layer3.Channel(mocks.from);
-//     var conn2 = Connection(@TypeOf(channel2)).init(std.testing.allocator, channel2, addr);
-//     const obj2 = try conn2.recv(@TypeOf(obj1));
-//     defer obj2.deinit();
-//     try std.testing.expectEqualDeep(obj1, obj2.inner.*);
-// }
+    const channel2 = layer3.Channel(mocks.from);
+    var conn2 = Connection(@TypeOf(channel2)).init(std.testing.allocator, channel2, addr);
+    const obj2 = try conn2.recv(@TypeOf(obj1));
+    defer obj2.deinit();
+    try std.testing.expectEqualDeep(obj1, obj2.inner.*);
+}
 
 // test "connection over unreliable channel" {
 //     std.debug.print("connection over unreliable channel\n", .{});
@@ -314,16 +302,16 @@ test "connection over big T" {
     defer mocks.deinit();
 
     const addr = layer3.Address.from(11);
+    const obj1 = initBytes(Packet.data_size * 19 + 1);
 
     const channel1 = layer3.Channel(mocks.to);
-    const obj1: BigObject = undefined;
     var conn1 = Connection(@TypeOf(channel1)).init(std.testing.allocator, channel1, addr);
 
     const thread = try std.Thread.spawn(.{}, struct {
-        fn run(conn: *@TypeOf(conn1)) void {
-            conn.send(obj1) catch @panic("a");
+        fn run(conn: *@TypeOf(conn1), obj: *const @TypeOf(obj1)) void {
+            conn.send(obj.*) catch @panic("a");
         }
-    }.run, .{&conn1});
+    }.run, .{ &conn1, &obj1 });
     defer thread.join();
 
     const channel2 = layer3.Channel(mocks.from);
