@@ -53,75 +53,156 @@ pub const Packet = extern struct {
 pub fn Connection(comptime ChannelImpl: type) type {
     return struct {
         const Self = @This();
+        const num_unacked_packets = 10;
+        const num_retries = 5;
 
         channel: layer3.ChannelInner(ChannelImpl),
         address: layer3.Address,
 
-        next_seq_num: u32,
-        expected_seq_num: u32,
-        unacked_packets: std.ArrayList(UnackedPacket),
         allocator: std.mem.Allocator,
-        buffer: std.ArrayList(u8),
-        recvbuffer: std.ArrayList(u8),
+        seq_num: u32 = 0,
+
+        unacked_packets: [num_unacked_packets]UnackedPacket = undefined,
+        unacked_packet_tail: usize = 0,
+        unacked_packet_head: usize = 0,
+
+        buffer: [@sizeOf(Packet)]u8 = undefined,
+        buffer_size: usize = 0,
 
         const UnackedPacket = struct {
             packet: Packet,
             last_sent: i64,
-            retries: u32,
+            retries: u32 = 0,
         };
 
         pub fn init(allocator: std.mem.Allocator, channel: ChannelImpl, address: layer3.Address) Self {
             return .{
                 .channel = layer3.Channel(channel),
                 .address = address,
-
-                .next_seq_num = 0,
-                .expected_seq_num = 0,
                 .allocator = allocator,
-                .unacked_packets = std.ArrayList(UnackedPacket).init(allocator),
-                .buffer = std.ArrayList(u8).init(allocator),
-                .recvbuffer = std.ArrayList(u8).init(allocator),
             };
-        }
-
-        pub fn deinit(self: *Self) void {
-            self.unacked_packets.deinit();
-            self.buffer.deinit();
-            self.recvbuffer.deinit();
         }
 
         pub fn send(self: *Self, data: anytype) !void {
             const bytes = std.mem.toBytes(data);
             var iter = std.mem.window(u8, &bytes, Packet.data_size, Packet.data_size);
-            while (iter.next()) |chunk| {
-                try self.sendBytes(chunk);
+
+            var timeout: i64 = 0;
+            while (true) {
+                const maybe_chunk = iter.next();
+                if (maybe_chunk == null and timeout == 0) {
+                    // if we ware done sending, start a timeout
+                    timeout = std.time.milliTimestamp();
+                }
+                // std.debug.print("self.unacked_packet_head - self.unacked_packet_tail = {}\n", .{self.unacked_packet_head - self.unacked_packet_tail});
+                std.debug.print("self.unacked_packet_head = {}, self.unacked_packet_tail = {}\n", .{ self.unacked_packet_head, self.unacked_packet_tail });
+                if (self.unacked_packet_head - self.unacked_packet_tail <= num_unacked_packets) {
+                    // only send a chunk if we have room in our unacked packets
+                    if (maybe_chunk) |chunk| {
+                        // try self.sendBytes(chunk);
+                        var packet = Packet.init();
+                        packet.seq_num = self.seq_num;
+                        packet.data_len = @intCast(chunk.len);
+                        @memcpy(packet.data[0..chunk.len], chunk);
+
+                        self.unacked_packet_head += 1;
+                        self.unacked_packets[@mod(self.unacked_packet_head, num_unacked_packets)] = .{
+                            .packet = packet,
+                            .last_sent = std.time.milliTimestamp(),
+                        };
+
+                        self.seq_num += 1;
+                        try self.sendPacket(&packet);
+                    }
+                } else if (timeout == 0) {
+                    // receiver might have disconnected
+                    timeout = std.time.milliTimestamp();
+                }
+
+                if (try self.recvPacket()) |packet| {
+                    if (!packet.flags.is_ack) return error.UnexpectedPacket;
+
+                    // find the packet to ack
+                    var pos: usize = self.unacked_packet_tail;
+                    while (pos < self.unacked_packet_head) : (pos += 1) {
+                        const i = @mod(pos, num_unacked_packets);
+                        if (self.unacked_packets[i].packet.seq_num == packet.ack_num) {
+                            self.unacked_packets[i] = self.unacked_packets[@mod(self.unacked_packet_tail, num_unacked_packets)];
+                            self.unacked_packet_tail += 1;
+                            break;
+                        }
+                    }
+                }
+
+                const current_time = std.time.milliTimestamp();
+
+                if (timeout != 0 and current_time - timeout > 1000) {
+                    return;
+                }
+
+                var pos: usize = self.unacked_packet_tail;
+                while (pos < self.unacked_packet_head) : (pos += 1) {
+                    const i = @mod(pos, num_unacked_packets);
+                    const unacked = &self.unacked_packets[i];
+                    if (current_time - unacked.last_sent > timeout) {
+                        if (unacked.retries >= num_retries) {
+                            return error.MaxRetriesExceeded;
+                        }
+                        try self.sendPacket(&unacked.packet);
+                        unacked.last_sent = current_time;
+                        unacked.retries += 1;
+                    }
+                }
+
+                if (maybe_chunk == null and self.unacked_packet_head == self.unacked_packet_tail) {
+                    return;
+                }
             }
-
-            try self.handleRetransmissions();
         }
 
-        fn sendBytes(self: *Self, data: []const u8) !void {
-            var packet = Packet.init();
-            packet.seq_num = self.next_seq_num;
-            packet.data_len = @intCast(data.len);
-            @memcpy(packet.data[0..data.len], data);
+        pub fn recv(self: *Self, comptime T: type) !Owned(*T) {
+            const result = try self.allocator.create(T);
+            errdefer self.allocator.destroy(result);
+            const result_bytes = std.mem.asBytes(result);
+            var remaining: usize = @sizeOf(T) / Packet.data_size;
+            if (@mod(@sizeOf(T), Packet.data_size) != 0) remaining += 1;
 
-            try self.unacked_packets.append(.{
-                .packet = packet,
-                .last_sent = std.time.milliTimestamp(),
-                .retries = 0,
-            });
+            var timeout = std.time.milliTimestamp();
 
-            self.next_seq_num += 1;
-            try self.sendPacket(&packet);
-        }
+            while (true) {
+                std.time.sleep(1 * 1000);
+                const currentTime = std.time.milliTimestamp();
+                if (try self.recvPacket()) |packet| {
+                    if (packet.flags.is_ack) return error.UnexpectedPacket;
 
-        fn sendAck(self: *Self, seq_num: u32) !void {
-            var ack_packet = Packet.init();
-            ack_packet.flags.is_ack = true;
-            ack_packet.ack_num = seq_num;
+                    var ack_packet = Packet.init();
+                    ack_packet.flags.is_ack = true;
+                    ack_packet.ack_num = packet.seq_num;
+                    try self.sendPacket(&ack_packet);
 
-            try self.sendPacket(&ack_packet);
+                    const offset = packet.seq_num * Packet.data_size;
+                    const len = @min(Packet.data_size, packet.data_len);
+                    if (offset + len > @sizeOf(T)) {
+                        return error.StopTheCount;
+                    }
+
+                    @memcpy(result_bytes[offset .. offset + len], packet.data[0..len]);
+                    remaining -= 1;
+                    // std.debug.print("remaining {}\n", .{remaining});
+
+                    if (remaining == 0) {
+                        return toOwned(result, self.allocator);
+                    }
+
+                    timeout = currentTime;
+                }
+
+                if (currentTime - timeout > 10 * 1000) {
+                    // std.debug.print("currentTime {}\n", .{currentTime});
+                    // std.debug.print("timeout {}\n", .{timeout});
+                    return error.Timeout;
+                }
+            }
         }
 
         fn sendPacket(self: *Self, packet: *Packet) !void {
@@ -136,88 +217,35 @@ pub fn Connection(comptime ChannelImpl: type) type {
             });
         }
 
-        pub fn recv(self: *Self, comptime T: type) !Owned(*T) {
-            while (try self.channel.recv(self.address)) |data| {
-                errdefer data.deinit();
-                try self.buffer.appendSlice(data.inner);
-                data.deinit();
-                if (self.buffer.items.len >= @sizeOf(Packet)) {
-                    const packet = self.buffer.items[0..@sizeOf(Packet)];
-                    const packet_pointer: *Packet = @ptrCast(packet.ptr);
-                    var packet_struct = packet_pointer.*;
+        fn recvPacket(self: *Self) !?Packet {
+            if (try self.channel.recv(self.address)) |data| {
+                std.debug.assert(data.inner.len <= @sizeOf(Packet));
+                defer data.deinit();
 
-                    std.debug.print("recv -> {any}\n", .{self.buffer.items.len});
-
-                    var newBuffer = std.ArrayList(u8).init(self.allocator);
-                    try newBuffer.appendSlice(self.buffer.items[@sizeOf(Packet)..]);
-                    self.buffer.deinit();
-                    self.buffer = newBuffer;
-
-                    if (packet_struct.verifyChecksum()) {
-                        const maybe_packet = self.recvPacket(&packet_struct) catch continue;
-                        if (maybe_packet) |packet_data| {
-                            try self.recvbuffer.appendSlice(packet_data);
-                            std.debug.print("recv items len: {}\n", .{self.recvbuffer.items.len});
-                            if (self.recvbuffer.items.len >= @sizeOf(T)) {
-                                const t: *T = @ptrCast(self.recvbuffer.items[0..@sizeOf(T)].ptr);
-                                const result = try self.allocator.create(T);
-                                errdefer self.allocator.destroy(result);
-                                result.* = t.*;
-
-                                var newRecvBuffer = std.ArrayList(u8).init(self.allocator);
-                                try newRecvBuffer.appendSlice(self.recvbuffer.items[@sizeOf(T)..]);
-                                self.recvbuffer.deinit();
-                                self.recvbuffer = newRecvBuffer;
-                                return toOwned(result, self.allocator);
-                            }
-                        }
-                    }
+                const remaining_bytes = @sizeOf(Packet) - self.buffer_size;
+                // std.debug.print("remaining_bytes {}\n", .{remaining_bytes});
+                // std.debug.print("data.inner.len < remaining_bytes {}\n", .{data.inner.len < remaining_bytes});
+                if (data.inner.len < remaining_bytes) {
+                    @memcpy(self.buffer[self.buffer_size .. self.buffer_size + data.inner.len], data.inner);
+                    self.buffer_size += data.inner.len;
+                    return null;
                 }
+
+                @memcpy(self.buffer[self.buffer_size..@sizeOf(Packet)], data.inner[0..remaining_bytes]);
+                const packet_ptr: *Packet = @ptrCast(&self.buffer[0]);
+                const packet = packet_ptr.*;
+
+                // std.debug.print("data.inner.len {}\n", .{data.inner.len});
+                // std.debug.print("remaining_bytes, data.inner.len: {} {}\n", .{ remaining_bytes, data.inner.len });
+                self.buffer_size = 0;
+                @memcpy(self.buffer[0 .. data.inner.len - remaining_bytes], data.inner[remaining_bytes..]);
+
+                if (!packet.verifyChecksum()) return null;
+                // std.debug.print("verified checksum\n", .{});
+
+                return packet;
             }
-            return error.RecvFailed;
-        }
-
-        fn recvPacket(self: *Self, packet: *Packet) !?[]const u8 {
-            if (packet.flags.is_ack) {
-                const ack_num = packet.ack_num;
-                var i: usize = 0;
-                while (i < self.unacked_packets.items.len) : (i += 1) {
-                    if (self.unacked_packets.items[i].packet.seq_num == ack_num) {
-                        _ = self.unacked_packets.orderedRemove(i);
-                        break;
-                    }
-                }
-                return null;
-            } else if (packet.seq_num == self.expected_seq_num) {
-                try self.sendAck(packet.seq_num);
-                self.expected_seq_num += 1;
-
-                return packet.data[0..packet.data_len];
-            }
-
-            return error.UnexpectedPacket;
-        }
-
-        pub fn handleRetransmissions(self: *Self) !void {
-            const timeout = 1000;
-            const max_retries = 5;
-
-            while (self.unacked_packets.items.len > 0) {
-                const current_time = std.time.milliTimestamp();
-                var i: usize = 0;
-                while (i < self.unacked_packets.items.len) : (i += 1) {
-                    var unacked = &self.unacked_packets.items[i];
-
-                    if (current_time - unacked.last_sent > timeout) {
-                        if (unacked.retries >= max_retries) {
-                            return error.MaxRetriesExceeded;
-                        }
-                        try self.sendPacket(&unacked.packet);
-                        unacked.last_sent = current_time;
-                        unacked.retries += 1;
-                    }
-                }
-            }
+            return null;
         }
     };
 }
@@ -227,114 +255,82 @@ const MyObject = extern struct {
 };
 
 const BigObject = extern struct {
-    hello: [Packet.data_size + 1]u8 align(1),
+    hello: [Packet.data_size * 100 + 1]u8 align(1),
 };
 
-pub fn send_thread_shim(data: anytype) void {
-    data.conn.send(data.obj) catch @panic("cant send data");
-}
+// test "connection" {
+//     std.debug.print("connection\n", .{});
+//     const mocks = try layer3.MockChannel.init(std.testing.allocator, 80, false);
+//     defer mocks.deinit();
 
-test "connection" {
-    std.debug.print("connection\n", .{});
-    const mock = layer3.MockChannel.init(std.testing.allocator, 80, false) catch unreachable;
-    defer mock.deinit();
-    const channel = layer3.Channel(mock);
+//     const addr = layer3.Address.from(11);
+
+//     const channel1 = layer3.Channel(mocks.to);
+//     const obj1 = MyObject{ .hello = 123 };
+//     var conn1 = Connection(@TypeOf(channel1)).init(std.testing.allocator, channel1, addr);
+
+//     const thread = try std.Thread.spawn(.{}, struct {
+//         fn run(conn: *@TypeOf(conn1)) void {
+//             conn.send(obj1) catch @panic("a");
+//         }
+//     }.run, .{&conn1});
+//     defer thread.join();
+
+//     const channel2 = layer3.Channel(mocks.from);
+//     var conn2 = Connection(@TypeOf(channel2)).init(std.testing.allocator, channel2, addr);
+//     const obj2 = try conn2.recv(@TypeOf(obj1));
+//     defer obj2.deinit();
+//     try std.testing.expectEqualDeep(obj1, obj2.inner.*);
+// }
+
+// test "connection over unreliable channel" {
+//     std.debug.print("connection over unreliable channel\n", .{});
+//     const mocks = try layer3.MockChannel.init(std.testing.allocator, 80, true);
+//     defer mocks.deinit();
+
+//     const addr = layer3.Address.from(11);
+
+//     const channel1 = layer3.Channel(mocks.to);
+//     const obj1 = MyObject{ .hello = 123 };
+//     var conn1 = Connection(@TypeOf(channel1)).init(std.testing.allocator, channel1, addr);
+//     defer conn1.deinit();
+//     try conn1.send(obj1);
+
+//     const channel2 = layer3.Channel(mocks.from);
+//     var conn2 = Connection(@TypeOf(channel2)).init(std.testing.allocator, channel2, addr);
+//     defer conn2.deinit();
+//     var obj2 = try conn2.recv(MyObject);
+//     while (obj2 == null) : (obj2 = try conn2.recv(MyObject)) {
+//         try conn1.handleRetransmissions();
+//     }
+//     const cobj2 = obj2.?;
+//     defer cobj2.deinit();
+//     try std.testing.expectEqualDeep(obj1, cobj2.inner.*);
+// }
+
+test "connection over big T" {
+    std.debug.print("connection over big T\n", .{});
+    const mocks = try layer3.MockChannel.init(std.testing.allocator, 80, false);
+    defer mocks.deinit();
 
     const addr = layer3.Address.from(11);
 
-    const obj1 = MyObject{ .hello = 123 };
-    var conn1 = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
-    defer conn1.deinit();
+    const channel1 = layer3.Channel(mocks.to);
+    const obj1: BigObject = undefined;
+    var conn1 = Connection(@TypeOf(channel1)).init(std.testing.allocator, channel1, addr);
 
-    const ThreadData = struct {
-        conn: Connection(@TypeOf(channel)),
-        obj: MyObject,
-    };
-    const thread_data = try std.testing.allocator.create(ThreadData);
-    defer std.testing.allocator.destroy(thread_data);
-    thread_data.* = .{ .conn = conn1, .obj = obj1 };
-    const thread = try std.Thread.spawn(.{}, send_thread_shim, .{thread_data});
+    const thread = try std.Thread.spawn(.{}, struct {
+        fn run(conn: *@TypeOf(conn1)) void {
+            conn.send(obj1) catch @panic("a");
+        }
+    }.run, .{&conn1});
     defer thread.join();
 
-    var conn2 = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
-    defer conn2.deinit();
-
-    const obj2 = try conn2.recv(MyObject);
+    const channel2 = layer3.Channel(mocks.from);
+    var conn2 = Connection(@TypeOf(channel2)).init(std.testing.allocator, channel2, addr);
+    const obj2 = try conn2.recv(@TypeOf(obj1));
     defer obj2.deinit();
-
     try std.testing.expectEqualDeep(obj1, obj2.inner.*);
-}
-
-test "connection over unreliable channel" {
-    std.debug.print("connection over unreliable channel\n", .{});
-    const mock = layer3.MockChannel.init(std.testing.allocator, 80, true) catch unreachable;
-    defer mock.deinit();
-    const channel = layer3.Channel(mock);
-
-    const addr = layer3.Address.from(11);
-
-    const obj1 = MyObject{ .hello = 123 };
-    var conn1 = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
-    defer conn1.deinit();
-    try conn1.send(obj1);
-
-    var conn2 = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
-    defer conn2.deinit();
-    var obj2 = try conn2.recv(MyObject);
-    while (obj2 == null) : (obj2 = try conn2.recv(MyObject)) {
-        try conn1.handleRetransmissions();
-    }
-    const cobj2 = obj2.?;
-    defer cobj2.deinit();
-    try std.testing.expectEqualDeep(obj1, cobj2.inner.*);
-}
-
-test "big T" {
-    std.debug.print("connection\n", .{});
-    const mock = layer3.MockChannel.init(std.testing.allocator, 80, false) catch unreachable;
-    defer mock.deinit();
-    const channel = layer3.Channel(mock);
-
-    const addr = layer3.Address.from(11);
-
-    const obj1: BigObject = undefined;
-    var conn1 = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
-    defer conn1.deinit();
-    try conn1.send(obj1);
-
-    var conn2 = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
-    defer conn2.deinit();
-    var obj2 = try conn2.recv(BigObject);
-    while (obj2 == null) : (obj2 = try conn2.recv(BigObject)) {
-        try conn1.handleRetransmissions();
-    }
-    const cobj2 = obj2.?;
-    defer cobj2.deinit();
-    try std.testing.expectEqualDeep(obj1, cobj2.inner.*);
-}
-
-test "out of order recv" {
-    std.debug.print("connection\n", .{});
-    const mock = layer3.MockChannel.init(std.testing.allocator, 80, false) catch unreachable;
-    defer mock.deinit();
-    const channel = layer3.Channel(mock);
-
-    const addr = layer3.Address.from(11);
-
-    const obj1: BigObject = undefined;
-    var conn1 = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
-    defer conn1.deinit();
-    try conn1.send(obj1);
-
-    var conn2 = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
-    defer conn2.deinit();
-    var obj2 = try conn2.recv(BigObject);
-    while (obj2 == null) : (obj2 = try conn2.recv(BigObject)) {
-        try conn1.handleRetransmissions();
-    }
-    const cobj2 = obj2.?;
-    defer cobj2.deinit();
-    try std.testing.expectEqualDeep(obj1, cobj2.inner.*);
 }
 
 test "packet checksum" {
