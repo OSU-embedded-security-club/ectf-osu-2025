@@ -229,3 +229,28 @@ test "ring buf mix push and pop" {
     try std.testing.expectEqual(@as(i32, 4), try rb.pop());
     try std.testing.expectEqual(@as(i32, 5), try rb.pop());
 }
+
+const TestStruct = struct {
+    id: u32,
+    name: []const u8,
+};
+
+test "ring buf with struct values" {
+    var rb = RingBuffer(TestStruct, 3).init();
+
+    const item1 = TestStruct{ .id = 1, .name = "Alice" };
+    const item2 = TestStruct{ .id = 2, .name = "Bob" };
+
+    try rb.push(item1);
+    try rb.push(item2);
+
+    const result1 = try rb.pop();
+    try std.testing.expectEqual(@as(u32, 1), result1.id);
+    try std.testing.expectEqualStrings("Alice", result1.name);
+
+    const result2 = try rb.pop();
+    try std.testing.expectEqual(@as(u32, 2), result2.id);
+    try std.testing.expectEqualStrings("Bob", result2.name);
+
+    try std.testing.expect(rb.isEmpty());
+}
