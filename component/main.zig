@@ -1,7 +1,8 @@
 const std = @import("std");
+
+const params = @import("params");
 const shared = @import("shared");
 const msdk = shared.msdk;
-const params = @import("params");
 
 pub const std_options = .{
     .logFn = shared.usb_log,
@@ -13,8 +14,8 @@ pub const os = struct {
     };
 };
 
-/// Entrypoint for the component
-pub export fn main() noreturn {
+/// High level entrypoint for the component
+pub fn run() !void {
     std.log.info("Initializing Component", .{});
     _ = msdk.LED_Init();
 
@@ -47,5 +48,25 @@ pub export fn main() noreturn {
             _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(500 / 3));
         }
         _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(2000 / 3));
+    }
+}
+
+/// Entrypoint for the component
+pub export fn main() noreturn {
+    _ = msdk.LED_Init();
+
+    var errored = false;
+    run() catch |err| {
+        std.log.err("Top level fatal error: {}", .{err});
+        errored = true;
+    };
+
+    const led: c_uint = if (errored) msdk.LED3 else msdk.LED2;
+
+    while (true) {
+        msdk.LED_On(led);
+        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
+        msdk.LED_Off(led);
+        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
     }
 }

@@ -14,28 +14,21 @@ pub const os = struct {
     };
 };
 
-/// Entrypoint for the application processor
-pub export fn main() noreturn {
+/// High level entrypoint for the application processor
+pub fn run() !void {
     std.log.info("Initializing AP", .{});
-    _ = msdk.LED_Init();
 
     var gpa = std.heap.GeneralPurposeAllocator(.{ .enable_memory_limit = true }){
         .requested_memory_limit = 0x0001e000,
     };
     const allocator = gpa.allocator();
-    const arr = allocator.alloc(i32, 10) catch unreachable;
+    const arr = try allocator.alloc(i32, 10);
     std.log.info("{any}", .{arr});
 
-    initI2C() catch {
-        msdk.LED_On(msdk.LED1);
-        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(5000));
-    };
+    try initI2C();
     msdk.LED_Off(msdk.LED1);
 
-    // sendI2C("Hello, world!") catch {
-    //     msdk.LED_On(msdk.LED3);
-    //     _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(5000));
-    // };
+    // try sendI2C("Hello, world!");
 
     msdk.LED_Off(msdk.LED1);
     msdk.LED_Off(msdk.LED2);
@@ -44,17 +37,37 @@ pub export fn main() noreturn {
     while (true) : (n += 1) {
         msdk.LED_Off(msdk.LED3);
         msdk.LED_On(msdk.LED1);
-        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
+        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(200));
         msdk.LED_Off(msdk.LED1);
         msdk.LED_On(msdk.LED2);
-        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
+        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(200));
         msdk.LED_Off(msdk.LED2);
         msdk.LED_On(msdk.LED3);
-        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
+        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(200));
 
         if (n % @as(usize, 10) == 0) {
             std.log.info("Total requested bytes: {}", .{gpa.total_requested_bytes});
         }
+    }
+}
+
+/// Entrypoint for the application processor
+pub export fn main() noreturn {
+    _ = msdk.LED_Init();
+
+    var errored = false;
+    run() catch |err| {
+        std.log.err("Top level fatal error: {}", .{err});
+        errored = true;
+    };
+
+    const led: c_uint = if (errored) msdk.LED3 else msdk.LED2;
+
+    while (true) {
+        msdk.LED_On(led);
+        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
+        msdk.LED_Off(led);
+        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
     }
 }
 
