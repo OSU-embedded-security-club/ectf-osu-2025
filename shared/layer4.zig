@@ -21,25 +21,13 @@ const Flags = packed struct {
 // Simple packet structure with checksum
 pub const Packet = extern struct {
     const data_size = 110;
-    seq_num: u32 align(1),
-    ack_num: u32 align(1),
-    index: u32 align(1),
-    flags: Flags align(1),
-    checksum: u32 align(1),
-    data_len: u8 align(1),
-    data: [data_size]u8 align(1),
-
-    pub fn init() Packet {
-        return .{
-            .seq_num = 0,
-            .ack_num = 0,
-            .index = 0,
-            .flags = .{ .is_ack = false },
-            .checksum = 0,
-            .data = [_]u8{0} ** data_size,
-            .data_len = 0,
-        };
-    }
+    seq_num: u32 align(1) = 0,
+    ack_num: u32 align(1) = 0,
+    index: u32 align(1) = 0,
+    flags: Flags align(1) = .{ .is_ack = false },
+    checksum: u32 align(1) = 0,
+    data_len: u8 align(1) = 0,
+    data: [data_size]u8 align(1) = [_]u8{0} ** data_size,
 
     pub fn calculateChecksum(self: *Packet) void {
         self.checksum = 0;
@@ -120,10 +108,11 @@ pub fn Connection(comptime ChannelImpl: type) type {
                     const chunk = bytes[offset..end];
                     offset += chunk.len;
 
-                    var packet = Packet.init();
-                    packet.seq_num = self.seq_num;
-                    packet.index = index;
-                    packet.data_len = @intCast(chunk.len);
+                    var packet = Packet{
+                        .seq_num = self.seq_num,
+                        .index = index,
+                        .data_len = @intCast(chunk.len),
+                    };
                     @memcpy(packet.data[0..chunk.len], chunk);
 
                     self.unacked_packets[@mod(self.unacked_packets_head_index, num_unacked_packets)] = .{
@@ -213,9 +202,7 @@ pub fn Connection(comptime ChannelImpl: type) type {
 
                     std.debug.print("RECV len={}, seq_num={}, index={}\n", .{ packet.data_len, packet.seq_num, packet.index });
 
-                    var ack_packet = Packet.init();
-                    ack_packet.flags.is_ack = true;
-                    ack_packet.ack_num = packet.seq_num;
+                    var ack_packet = Packet{ .ack_num = packet.seq_num, .flags = .{ .is_ack = true } };
                     try self.sendPacket(&ack_packet);
 
                     const offset = packet.index * Packet.data_size;
@@ -247,12 +234,6 @@ pub fn Connection(comptime ChannelImpl: type) type {
             packet.calculateChecksum();
             const bytes = std.mem.asBytes(packet);
             try self.channel.send(bytes, self.address);
-
-            // std.debug.print("Sending packet: seq={}, ack={}, is_ack={}\n", .{
-            //     packet.seq_num,
-            //     packet.ack_num,
-            //     packet.flags.is_ack,
-            // });
         }
 
         fn recvPacket(self: *Self) !?Packet {
@@ -432,13 +413,13 @@ test "connection receive with no sender" {
 }
 
 test "packet checksum" {
-    var packet = Packet.init();
+    var packet = Packet{};
     packet.calculateChecksum();
     try std.testing.expect(packet.verifyChecksum());
 }
 
 test "corrupted packet checksum" {
-    var packet = Packet.init();
+    var packet = Packet{};
     packet.calculateChecksum();
     packet.data[13] += 2;
     try std.testing.expect(!packet.verifyChecksum());
