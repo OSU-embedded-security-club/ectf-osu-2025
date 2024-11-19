@@ -8,8 +8,11 @@ const toOwned = shared.toOwned;
 
 pub const ConnectionError = error{
     Timeout,
-    UnexpectedPacket,
     MaxRetriesExceeded,
+    UnexpectedPacket,
+
+    /// An extremely significant error has occurred that can only happen if
+    /// someone has interfered with the data.
     StopTheCount,
 } || layer3.ChannelError;
 
@@ -19,7 +22,7 @@ const Flags = packed struct {
     _: u7 = 0,
 };
 
-// Simple packet structure with checksum
+/// Simple packet structure with checksum
 pub const Packet = extern struct {
     const data_size = 110;
 
@@ -66,7 +69,7 @@ pub fn Connection(comptime ChannelImpl: type) type {
         const Self = @This();
         const num_unacked_packets = 5;
         const num_retries = 3;
-        const global_timeout = 5 * 1000;
+        const global_timeout = 10 * 1000;
 
         channel: layer3.ChannelInner(ChannelImpl),
         address: layer3.Address,
