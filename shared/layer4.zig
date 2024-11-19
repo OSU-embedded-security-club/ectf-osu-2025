@@ -74,8 +74,8 @@ pub fn Connection(comptime ChannelImpl: type) type {
         seq_num: u32 = 0,
 
         unacked_packets: [num_unacked_packets]UnackedPacket = undefined,
-        unacked_packet_tail: usize = 0,
-        unacked_packet_head: usize = 0,
+        unacked_packets_tail_index: usize = 0,
+        unacked_packets_head_index: usize = 0,
 
         buffer: [@sizeOf(Packet)]u8 = undefined,
         buffer_size: usize = 0,
@@ -113,7 +113,7 @@ pub fn Connection(comptime ChannelImpl: type) type {
                     // if we ware done sending, start a timeout
                     timeout = std.time.milliTimestamp();
                 }
-                if (remaining > 0 and self.unacked_packet_head - self.unacked_packet_tail < num_unacked_packets) {
+                if (remaining > 0 and self.unacked_packets_head_index - self.unacked_packets_tail_index < num_unacked_packets) {
                     remaining -= 1;
                     // only send a chunk if we have room in our unacked packets
                     const end = @min(offset + Packet.data_size, bytes.len);
@@ -126,11 +126,11 @@ pub fn Connection(comptime ChannelImpl: type) type {
                     packet.data_len = @intCast(chunk.len);
                     @memcpy(packet.data[0..chunk.len], chunk);
 
-                    self.unacked_packets[@mod(self.unacked_packet_head, num_unacked_packets)] = .{
+                    self.unacked_packets[@mod(self.unacked_packets_head_index, num_unacked_packets)] = .{
                         .packet = packet,
                         .last_sent = std.time.milliTimestamp(),
                     };
-                    self.unacked_packet_head += 1;
+                    self.unacked_packets_head_index += 1;
 
                     self.seq_num += 1;
                     index += 1;
@@ -146,12 +146,19 @@ pub fn Connection(comptime ChannelImpl: type) type {
                     if (!packet.flags.is_ack) return error.UnexpectedPacket;
 
                     // find the packet to ack
-                    var pos: usize = self.unacked_packet_tail;
-                    while (pos < self.unacked_packet_head) : (pos += 1) {
+                    var pos: usize = self.unacked_packets_tail_index;
+                    while (pos < self.unacked_packets_head_index) : (pos += 1) {
                         const i = @mod(pos, num_unacked_packets);
                         if (self.unacked_packets[i].packet.seq_num == packet.ack_num) {
-                            self.unacked_packets[i] = self.unacked_packets[@mod(self.unacked_packet_tail, num_unacked_packets)];
-                            self.unacked_packet_tail += 1;
+                            const last_tail = @mod(self.unacked_packets_tail_index, num_unacked_packets);
+                            if (last_tail != i) self.unacked_packets[i] = self.unacked_packets[last_tail];
+
+                            self.unacked_packets_tail_index += 1;
+                            if (self.unacked_packets_tail_index >= num_unacked_packets) {
+                                self.unacked_packets_tail_index -= num_unacked_packets;
+                                self.unacked_packets_head_index -= num_unacked_packets;
+                            }
+
                             timeout = std.time.milliTimestamp();
                             std.debug.print("ACKN ack_num={}\n", .{packet.ack_num});
                             break;
@@ -165,8 +172,8 @@ pub fn Connection(comptime ChannelImpl: type) type {
                     return;
                 }
 
-                var pos: usize = self.unacked_packet_tail;
-                while (pos < self.unacked_packet_head) : (pos += 1) {
+                var pos: usize = self.unacked_packets_tail_index;
+                while (pos < self.unacked_packets_head_index) : (pos += 1) {
                     const i = @mod(pos, num_unacked_packets);
                     const unacked = &self.unacked_packets[i];
                     if (current_time - unacked.last_sent > 1000) {
@@ -180,7 +187,7 @@ pub fn Connection(comptime ChannelImpl: type) type {
                     }
                 }
 
-                if (remaining == 0 and self.unacked_packet_head == self.unacked_packet_tail) {
+                if (remaining == 0 and self.unacked_packets_head_index == self.unacked_packets_tail_index) {
                     return;
                 }
             }
