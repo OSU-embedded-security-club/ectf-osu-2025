@@ -11,4 +11,7 @@
   )
   {src = ./.;}
 )
-.shellNix
+.defaultNix
+.devShells
+."${builtins.currentSystem}"
+.ectf
