@@ -17,7 +17,6 @@ pub const Address = enum(u10) {
 
 pub const ChannelError = error{
     SendFailed,
-    // SendTooBig,
     RecvFailed,
 } || std.mem.Allocator.Error;
 
@@ -146,9 +145,6 @@ const MockChannelSimplex = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
 
-        // if (data.len > self.recv_buffer_size) {
-        //     return ChannelError.SendTooBig;
-        // }
         if (self.sendBuffer.getPtr(to)) |buffer| {
             try buffer.appendSlice(data);
         } else {
