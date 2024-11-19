@@ -162,7 +162,7 @@ pub fn build(b: *std.Build) !void {
     });
     const install_docs = b.addInstallDirectory(.{
         .source_dir = docs.getEmittedDocs(),
-        .install_dir = .prefix,
+        .install_dir = .{ .custom = ".." },
         .install_subdir = "docs",
     });
     const docs_step = b.step("docs", "Generate documentation");
