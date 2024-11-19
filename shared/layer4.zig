@@ -64,7 +64,7 @@ pub fn Connection(comptime ChannelImpl: type) type {
     return struct {
         const Self = @This();
         const num_unacked_packets = 10;
-        const num_retries = 5;
+        const num_retries = 3;
         const global_timeout = 5 * 1000;
 
         channel: layer3.ChannelInner(ChannelImpl),
@@ -400,6 +400,35 @@ test "connection transmitting multiple Ts" {
     const obj12r = try conn2.recv(@TypeOf(obj2));
     defer obj12r.deinit();
     try std.testing.expectEqualDeep(obj2, obj12r.inner.*);
+}
+
+test "connection send with no receiver" {
+    std.debug.print("\nTEST: connection send with no receiver\n", .{});
+    const mocks = try layer3.MockChannel.init(std.testing.allocator, 80, false);
+    defer mocks.deinit();
+
+    const addr = layer3.Address.from(11);
+
+    const channel = layer3.Channel(mocks.to);
+    var conn = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
+
+    const obj = initBytes(12);
+    const result = conn.send(obj);
+    try std.testing.expectError(error.MaxRetriesExceeded, result);
+}
+
+test "connection receive with no sender" {
+    std.debug.print("\nTEST: connection receive with no sender\n", .{});
+    const mocks = try layer3.MockChannel.init(std.testing.allocator, 80, false);
+    defer mocks.deinit();
+
+    const addr = layer3.Address.from(11);
+
+    const channel = layer3.Channel(mocks.from);
+    var conn = Connection(@TypeOf(channel)).init(std.testing.allocator, channel, addr);
+
+    const result = conn.recv(u32);
+    try std.testing.expectError(error.Timeout, result);
 }
 
 test "packet checksum" {
