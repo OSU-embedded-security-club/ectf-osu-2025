@@ -6,6 +6,13 @@ const shared = @import("main.zig");
 const Owned = shared.Owned;
 const toOwned = shared.toOwned;
 
+pub const ConnectionError = error{
+    Timeout,
+    UnexpectedPacket,
+    MaxRetriesExceeded,
+    StopTheCount,
+} || layer3.ChannelError;
+
 const Flags = packed struct {
     is_ack: bool,
     _: u7 = 0,
@@ -52,6 +59,7 @@ pub const Packet = extern struct {
     }
 };
 
+/// Reliable connection over an unreliable channel. Can send arbitrarily large data over the channel.
 pub fn Connection(comptime ChannelImpl: type) type {
     return struct {
         const Self = @This();
@@ -86,7 +94,9 @@ pub fn Connection(comptime ChannelImpl: type) type {
             };
         }
 
-        pub fn send(self: *Self, data: anytype) !void {
+        /// Blocks until all data is sent and successfully acknowledged by the receiver.
+        /// Will return early if there is an error or the connection times out.
+        pub fn send(self: *Self, data: anytype) ConnectionError!void {
             const T = @TypeOf(data);
             const bytes = std.mem.asBytes(&data);
 
@@ -176,7 +186,8 @@ pub fn Connection(comptime ChannelImpl: type) type {
             }
         }
 
-        pub fn recv(self: *Self, comptime T: type) !Owned(*T) {
+        /// Blocks until all data is received. Will return early if there is an error or the connection times out.
+        pub fn recv(self: *Self, comptime T: type) ConnectionError!Owned(*T) {
             const result = try self.allocator.create(T);
             errdefer self.allocator.destroy(result);
             const result_bytes = std.mem.asBytes(result);
@@ -289,7 +300,7 @@ test "connection" {
 
     const thread = try std.Thread.spawn(.{}, struct {
         fn run(conn: *@TypeOf(conn1), obj: *const @TypeOf(obj1)) void {
-            conn.send(obj.*) catch @panic("a");
+            conn.send(obj.*) catch @panic("failed to send");
         }
     }.run, .{ &conn1, &obj1 });
     defer thread.join();
@@ -314,7 +325,7 @@ test "connection over big T" {
 
     const thread = try std.Thread.spawn(.{}, struct {
         fn run(conn: *@TypeOf(conn1), obj: *const @TypeOf(obj1)) void {
-            conn.send(obj.*) catch @panic("a");
+            conn.send(obj.*) catch @panic("failed to send");
         }
     }.run, .{ &conn1, &obj1 });
     defer thread.join();
@@ -339,7 +350,7 @@ test "connection over unreliable channel" {
 
     const thread = try std.Thread.spawn(.{}, struct {
         fn run(conn: *@TypeOf(conn1), obj: *const @TypeOf(obj1)) void {
-            conn.send(obj.*) catch @panic("a");
+            conn.send(obj.*) catch @panic("failed to send");
         }
     }.run, .{ &conn1, &obj1 });
     defer thread.join();
@@ -366,8 +377,8 @@ test "connection transmitting multiple Ts" {
 
     const thread = try std.Thread.spawn(.{}, struct {
         fn run(conn: *@TypeOf(conn1), a: *const @TypeOf(obj1), b: *const @TypeOf(obj2)) void {
-            conn.send(a.*) catch @panic("a");
-            conn.send(b.*) catch @panic("b");
+            conn.send(a.*) catch @panic("failed to send (a)");
+            conn.send(b.*) catch @panic("failed to send (b)");
         }
     }.run, .{ &conn1, &obj1, &obj2 });
     defer thread.join();
@@ -393,7 +404,7 @@ test "packet checksum" {
 test "corrupted packet checksum" {
     var packet = Packet.init();
     packet.calculateChecksum();
-    packet.checksum += 1;
+    packet.data[13] += 2;
     try std.testing.expect(!packet.verifyChecksum());
 }
 
