@@ -14,6 +14,7 @@ pub const ConnectionError = error{
 } || layer3.ChannelError;
 
 const Flags = packed struct {
+    /// Whether the packet is an acknowledgment
     is_ack: bool,
     _: u7 = 0,
 };
@@ -21,14 +22,24 @@ const Flags = packed struct {
 // Simple packet structure with checksum
 pub const Packet = extern struct {
     const data_size = 110;
+
+    /// Sequence number of the packet
     seq_num: u32 align(1) = 0,
+
+    /// Sequence number of the packet being acknowledged
     ack_num: u32 align(1) = 0,
+
+    /// Index of the data chunk in the message
     index: u32 align(1) = 0,
-    flags: Flags align(1) = .{ .is_ack = false },
+
+    /// CRC 32 checksum of the whole packet
     checksum: u32 align(1) = 0,
+
+    flags: Flags align(1) = .{ .is_ack = false },
     data_len: u8 align(1) = 0,
     data: [data_size]u8 align(1) = [_]u8{0} ** data_size,
 
+    /// Calculate and modify the checksum of the packet
     pub fn calculateChecksum(self: *Packet) void {
         self.checksum = 0;
         const bytes = std.mem.asBytes(self);
@@ -37,6 +48,7 @@ pub const Packet = extern struct {
         self.checksum = hasher.final();
     }
 
+    /// Check that the checksum of the packet is valid
     pub fn verifyChecksum(self: *const Packet) bool {
         var temp_packet = self.*;
         temp_packet.checksum = 0;
@@ -48,10 +60,11 @@ pub const Packet = extern struct {
 };
 
 /// Reliable connection over an unreliable channel. Can send arbitrarily large data over the channel.
+/// `ChannelImpl` must implement the `Channel` interface.
 pub fn Connection(comptime ChannelImpl: type) type {
     return struct {
         const Self = @This();
-        const num_unacked_packets = 10;
+        const num_unacked_packets = 5;
         const num_retries = 3;
         const global_timeout = 5 * 1000;
 
@@ -139,9 +152,12 @@ pub fn Connection(comptime ChannelImpl: type) type {
                     while (pos < self.unacked_packets_head_index) : (pos += 1) {
                         const i = @mod(pos, num_unacked_packets);
                         if (self.unacked_packets[i].packet.seq_num == packet.ack_num) {
+                            // swap the acked packet with the last unacked packet, which will be removed
                             const last_tail = @mod(self.unacked_packets_tail_index, num_unacked_packets);
                             if (last_tail != i) self.unacked_packets[i] = self.unacked_packets[last_tail];
 
+                            // move the tail up, removing the acked packet from the unacked list. If the tail gets
+                            // too high, move the tail and head down (to avoid overflow when it gets to @sizeOf(usize))
                             self.unacked_packets_tail_index += 1;
                             if (self.unacked_packets_tail_index >= num_unacked_packets) {
                                 self.unacked_packets_tail_index -= num_unacked_packets;
@@ -230,12 +246,14 @@ pub fn Connection(comptime ChannelImpl: type) type {
             return toOwned(result, self.allocator);
         }
 
+        /// Calculate the checksum of the packet and send it over the underlying channel
         fn sendPacket(self: *Self, packet: *Packet) !void {
             packet.calculateChecksum();
             const bytes = std.mem.asBytes(packet);
             try self.channel.send(bytes, self.address);
         }
 
+        /// Poll receiving a `Packet` from the underlying channel
         fn recvPacket(self: *Self) !?Packet {
             if (try self.channel.recv(self.address)) |data| {
                 std.debug.assert(data.inner.len <= @sizeOf(Packet));
@@ -262,6 +280,7 @@ pub fn Connection(comptime ChannelImpl: type) type {
 
                 return packet;
             }
+
             return null;
         }
     };
