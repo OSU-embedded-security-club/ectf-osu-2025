@@ -146,16 +146,22 @@ pub fn build(b: *std.Build) !void {
     apStep.dependOn(&b.addInstallArtifact(apExe, .{ .dest_dir = .{ .override = .{ .custom = "../application_processor/c/src" } } }).step);
     compStep.dependOn(&b.addInstallArtifact(compExe, .{ .dest_dir = .{ .override = .{ .custom = "../component/c/src" } } }).step);
 
-    const test_step = b.step("test", "Run unit tests");
     const unit_tests = b.addTest(.{
         .root_source_file = b.path("shared/main.zig"),
         .target = b.resolveTargetQuery(.{}),
     });
     const run_unit_tests = b.addRunArtifact(unit_tests);
+    const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
 
+    const docs = b.addObject(.{
+        .name = "main",
+        .root_source_file = b.path("shared/main.zig"),
+        .target = target,
+        .optimize = .Debug,
+    });
     const install_docs = b.addInstallDirectory(.{
-        .source_dir = unit_tests.getEmittedDocs(),
+        .source_dir = docs.getEmittedDocs(),
         .install_dir = .{ .custom = ".." },
         .install_subdir = "docs",
     });
