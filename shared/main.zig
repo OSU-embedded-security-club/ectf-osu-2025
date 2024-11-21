@@ -5,10 +5,12 @@ pub const msdk = @import("msdk");
 
 pub const layer3 = @import("layer3.zig");
 pub const layer4 = @import("layer4.zig");
+pub const sugma = @import("sugma.zig");
 
 comptime {
     _ = layer3;
     _ = layer4;
+    _ = sugma;
 }
 
 /// Used to override Zig's default log function to work on the embedded, `freestanding` platform. Normally, Zig has a hard dependency on posix.
