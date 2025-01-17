@@ -18,6 +18,23 @@
         "type": "github"
       }
     },
+    "msdk": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1708376850,
+        "narHash": "sha256-rQef3KDGIC9N5HdUU5TocF8+uLhHS6PgfMDI97D1AbY=",
+        "owner": "Analog-Devices-MSDK",
+        "repo": "msdk",
+        "rev": "b20b398d3e5e2007594e54a74ba3d2a2e50ddd75",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Analog-Devices-MSDK",
+        "ref": "v2024_02",
+        "repo": "msdk",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1731139594,
@@ -37,6 +54,7 @@
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
+        "msdk": "msdk",
         "nixpkgs": "nixpkgs"
       }
     },

@@ -16,7 +16,7 @@ tasks:
     cmds:
       - python -m ectf25_design.gen_secrets -f secrets/secrets.json {{.CHANNELS}}
 
-  2-firmware:
+  2-build-firmware:
     desc: Build the firmware image
     dir: decoder
     vars:

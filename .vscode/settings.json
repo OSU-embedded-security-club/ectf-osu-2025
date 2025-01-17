@@ -1,7 +1,5 @@
 {
   "zig.path": "zig",
   "zig.zls.path": "zls",
-  "zig.zls.enableBuildOnSave": true,
-  "zig.zls.enableAutofix": true,
-  "zig.zls.buildOnSaveStep": "test"
+  "zig.zls.enableBuildOnSave": true
 }

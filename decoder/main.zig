@@ -66,9 +66,9 @@ pub fn run() !void {
         msdk.LED_Off(msdk.LED1);
         msdk.LED_On(msdk.LED2);
         _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
-        // msdk.LED_Off(msdk.LED2);
-        // msdk.LED_On(msdk.LED3);
-        // _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
+        msdk.LED_Off(msdk.LED2);
+        msdk.LED_On(msdk.LED3);
+        _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(1000));
 
         if (n % @as(usize, 10) == 0) {
             std.log.info("Total requested bytes: {}", .{gpa.total_requested_bytes});

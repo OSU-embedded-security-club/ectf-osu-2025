@@ -41,7 +41,7 @@ pub fn build(b: *std.Build) !void {
             "/Libraries/MiscDrivers/PMIC",
             "/Libraries/MiscDrivers/Touchscreen",
             "/Libraries/MiscDrivers/CODEC",
-            "/Libraries/PeriphDrivers/Include/MAX78000/",
+            "/Libraries/PeriphDrivers/Include/MAX78000",
             "/Libraries/PeriphDrivers/Source/ADC",
             "/Libraries/PeriphDrivers/Source/AES",
             "/Libraries/PeriphDrivers/Source/CAMERAIF",
@@ -71,7 +71,7 @@ pub fn build(b: *std.Build) !void {
             msdk.addIncludeDir(try std.fs.path.join(b.allocator, &[_][]const u8{ msdk_path, include_path }));
         }
 
-        msdk.addIncludeDir("/usr/lib/arm-none-eabi/include");
+        msdk.addIncludeDir(try std.fs.path.join(b.allocator, &[_][]const u8{ env.get("GCC_ARM_EMBDEDDED") orelse "/usr/lib", "arm-none-eabi/include" }));
 
         msdk.defineCMacroRaw("TARGET=MAX78000");
         msdk.defineCMacroRaw("TARGET_REV=0x4131");
