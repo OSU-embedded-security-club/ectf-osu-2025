@@ -7,77 +7,41 @@ on:
       - main
 
 jobs:
-  ap:
-    name: Build AP firmware
+  decoder:
+    name: Build Decoder firmware
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install Nix
-      uses: DeterminateSystems/nix-installer-action@main
-
-    - name: Cache Nix
-      uses: DeterminateSystems/magic-nix-cache-action@main
-
-    - name: Set up environment
-      run: nix-shell --run 'poetry install'
-
-    - name: Compile firmware
-      run: ./compile_ap.sh
-
-    - name: Create artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ap.img
-        path: ap.img
-
-  comp:
-    name: Build Component firmware
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install Nix
-      uses: DeterminateSystems/nix-installer-action@main
-
-    - name: Cache Nix
-      uses: DeterminateSystems/magic-nix-cache-action@main
-
-    - name: Set up environment
-      run: nix-shell --run 'poetry install'
-
-    - name: Compile firmware
-      run: ./compile_comp.sh
-
-    - name: Create artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: comp.img
-        path: comp.img
-
-  release:
-    name: Release firmware
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    needs: [ap, comp]
     permissions:
       contents: write
+      id-token: write
     steps:
     - uses: actions/checkout@v4
 
-    - uses: actions/download-artifact@v4
+    - name: Set up environment
+      run: |
+        python -m pip install ./tools/
+        python -m pip install -e ./design/
+
+    - name: Generate secrets
+      run: python -m ectf25_design.gen_secrets -f secrets/secrets.json 1 2 3
+
+    - name: Cache Docker images
+      uses: ScribeMD/docker-cache@0.5.0
       with:
-        name: ap.img
-    
-    - uses: actions/download-artifact@v4
+        key: docker-${{ runner.os }}-${{ hashFiles('decoder/Dockerfile') }}
+
+    - name: Build docker image
+      working-directory: decoder
+      run: docker build -t decoder .
+
+    - name: Build firmware
+      working-directory: decoder
+      run: docker run --rm -v ./build_out:/out -v ./:/decoder -v ./../secrets:/secrets -e DECODER_ID=0xdeadbeef decoder
+
+    - name: Create artifact
+      uses: actions/upload-artifact@v4
       with:
-        name: comp.img
+        name: max78000.bin
+        path: decoder/build_out/max78000.bin
 
     - name: Get tag name
       id: tag-name
@@ -89,5 +53,4 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         gh release create ${{ steps.tag-name.outputs.tagname }} -t "firmware" -n "Firmware release (${{ steps.tag-name.outputs.tagname }})"
-        gh release upload ${{ steps.tag-name.outputs.tagname }} ap.img
-        gh release upload ${{ steps.tag-name.outputs.tagname }} comp.img
+        gh release upload ${{ steps.tag-name.outputs.tagname }} decoder/build_out/max78000.bin

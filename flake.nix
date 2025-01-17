@@ -1,71 +1,56 @@
 {
-  description = "A devShell example";
+  description = "Python development environment with local packages";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    flake-compat.url = "https://flakehub.com/f/edolstra/flake-compat/1.tar.gz";
-    msdk = {
-      url = "github:Analog-Devices-MSDK/msdk/v2023_06?shallow=1";
-      flake = false;
-    };
   };
 
-  outputs = {
-    self,
-    nixpkgs,
-    flake-utils,
-    msdk,
-    ...
-  }:
-    flake-utils.lib.eachDefaultSystem (
-      system: let
-        pkgs = import nixpkgs {inherit system;};
+  outputs = { self, nixpkgs, flake-utils }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+
+        mkPythonPackage = path: pkgs.python3Packages.buildPythonPackage {
+          pname = builtins.baseNameOf path;
+          version = "0.1.0";
+          src = path;
+          format = "pyproject";
+          propagatedBuildInputs = with pkgs.python3Packages; [ setuptools loguru pyserial tqdm ];  # Add dependencies if needed
+        };
+
+        toolsPackage = mkPythonPackage ./tools;
+        designPackage = mkPythonPackage ./design;
+
       in {
-        devShells = {
-          default = pkgs.mkShell {
-            buildInputs = with pkgs; [
-              zig
-              zls
-              clang-tools
-              bear
-              alejandra
+        devShells.default = pkgs.mkShell {
+          name = "ectf-zig";
+          
+          buildInputs = with pkgs; [
+            toolsPackage
+            designPackage
 
-              gnumake
-              python39
-              gcc-arm-embedded
-              poetry
-              cacert
-              (pkgs.callPackage pkgs/analog_openocd.nix {})
-              minicom
-            ];
+            zig
+            go-task
+            zls
+            clang-tools
+          ];
 
-            GCC_ARM_EMBDEDDED = pkgs.gcc-arm-embedded;
+          shellHook = ''
+            # Detect shell and set up completions accordingly
+            if [ -n "$BASH" ]; then
+              source <(task --completion bash)
+            elif [ -n "$ZSH_NAME" ]; then
+              source <(task --completion zsh)
+            elif [ -n "$FISH_VERSION" ]; then
+              TMPFILE=$(mktemp)
+              task --completion-script fish > $TMPFILE
+              source $TMPFILE
+              rm $TMPFILE
+            fi
 
-            shellHook = ''
-              cp -r ${msdk} $PWD/msdk
-              chmod -R u+rwX,go+rX,go-w $PWD/msdk
-              export MAXIM_PATH=$PWD/msdk
-            '';
-          };
-
-          ectf = pkgs.mkShell {
-            buildInputs = with pkgs; [
-              zig
-              gnumake
-              python39
-              gcc-arm-embedded
-              poetry
-            ];
-
-            GCC_ARM_EMBDEDDED = pkgs.gcc-arm-embedded;
-
-            shellHook = ''
-              cp -r ${msdk} $PWD/msdk
-              chmod -R u+rwX,go+rX,go-w $PWD/msdk
-              export MAXIM_PATH=$PWD/msdk
-            '';
-          };
+            echo "go-task development environment loaded"
+          '';
         };
       }
     );

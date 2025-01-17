@@ -1,0 +1,95 @@
+version: '3'
+
+tasks:
+  require-decoder:
+    internal: true
+    preconditions:
+      - sh: ls /dev/ttyACM0
+        msg: Decoder device not connected (physically connect the MAX78000 to your computer over USB and run the command again)
+    cmds:
+      - '[ "$(stat -c %a /dev/ttyACM0)" != "777" ] && sudo chmod 777 /dev/ttyACM0 || true'
+
+  1-gen-secrets:
+    desc: Generate secrets
+    vars:
+      CHANNELS: '{{.CLI_ARGS | default "1 2 3"}}'
+    cmds:
+      - python -m ectf25_design.gen_secrets -f secrets/secrets.json {{.CHANNELS}}
+
+  2-firmware:
+    desc: Build the firmware image
+    dir: decoder
+    vars:
+      DECODER_ID: '{{.DECODER_ID | default "0xdeadbeef"}}'
+    cmds:
+      - docker build -t decoder .
+      - docker run --rm -v ./build_out:/out -v ./:/decoder -v ./../secrets:/secrets -e DECODER_ID={{.DECODER_ID}} decoder
+
+  3-flash:
+    desc: Flash the built firmware image onto the Decoder
+    dir: decoder
+    deps:
+      - task: require-decoder
+    cmds:
+      - python -m ectf25.utils.flash ./build_out/max78000.bin /dev/ttyACM0
+
+  4-gen-subscription:
+    desc: Generate a subscription
+    vars:
+      FILE: '{{.FILE | default "subscription.bin"}}'
+      DEVICE_ID: '{{.DEVICE_ID | default "0xDEADBEEF"}}'
+      START: '{{.START | default "32"}}'
+      END: '{{.END | default "128"}}'
+      CHANNEL: '{{.CHANNEL | default "1"}}'
+    cmds:
+      - python -m ectf25_design.gen_subscription -f secrets/secrets.json {{.FILE}} {{.DEVICE_ID}} {{.START}} {{.END}} {{.CHANNEL}}
+
+  5-subscribe:
+    desc: Take a subscription file and send it to the Decoder
+    deps:
+      - task: require-decoder
+    vars:
+      FILE: '{{.FILE | default "subscription.bin"}}'
+    preconditions:
+      - sh: ls {{.FILE}}
+        msg: Subscription '{{.FILE}}' does not exist
+    cmds:
+      - python -m ectf25.tv.subscribe {{.FILE}} /dev/ttyACM0
+
+  6-list:
+    desc: Asks the Decoder to list the subscriptions that it currently has
+    deps:
+      - task: require-decoder
+    cmds:
+      - python -m ectf25.tv.list /dev/ttyACM0
+
+  7-uplink:
+    desc: Encodes sample frames with the custom encoder function and sends them to the satellite
+    prefix: uplink
+    cmds:
+      - python -m ectf25.uplink secrets/secrets.json localhost 2000 1:10:frames/x_c0.json
+
+  8-satellite:
+    desc: Broadcasts all frames received from the uplink to all listening TVs on the host computer
+    prefix: satellite
+    cmds:
+      - python -m ectf25.satellite localhost 2000 localhost 1:2001
+
+  delayed-satellite:
+    internal: true
+    cmds:
+      - sleep 2
+      - task: satellite
+
+  9-tv:
+    desc: Receives encoded frames from the satellite and decodes with a Decoder connected to the host computer
+    deps:
+      - task: require-decoder
+    cmds:
+      - python -m ectf25.tv.run localhost 2001 /dev/ttyACM0
+
+  10-end-to-end:
+    desc: Run a complete end to end test
+    deps:
+      - task: uplink
+      - task: delayed-satellite

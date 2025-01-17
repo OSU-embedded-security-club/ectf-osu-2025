@@ -1,19 +1,5 @@
 {
   "nodes": {
-    "flake-compat": {
-      "locked": {
-        "lastModified": 1696426674,
-        "narHash": "sha256-kvjfFW7WAETZlt09AgDn1MrtKzP7t90Vf7vypd3OL1U=",
-        "rev": "0f9255e01c2351cc7d116c072cb317785dd33b33",
-        "revCount": 57,
-        "type": "tarball",
-        "url": "https://api.flakehub.com/f/pinned/edolstra/flake-compat/1.0.1/018afb31-abd1-7bff-a5e4-cff7e18efb7a/source.tar.gz"
-      },
-      "original": {
-        "type": "tarball",
-        "url": "https://flakehub.com/f/edolstra/flake-compat/1.tar.gz"
-      }
-    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -29,23 +15,6 @@
       "original": {
         "owner": "numtide",
         "repo": "flake-utils",
-        "type": "github"
-      }
-    },
-    "msdk": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1687998985,
-        "narHash": "sha256-f3aoXeGYlYR3JPm2ImQDkICepoyvP7oV2DeL4nU+yK4=",
-        "owner": "Analog-Devices-MSDK",
-        "repo": "msdk",
-        "rev": "0c7efe7c10a288e3eb086f5d8b06e8af08dab6e0",
-        "type": "github"
-      },
-      "original": {
-        "owner": "Analog-Devices-MSDK",
-        "ref": "v2023_06",
-        "repo": "msdk",
         "type": "github"
       }
     },
@@ -67,9 +36,7 @@
     },
     "root": {
       "inputs": {
-        "flake-compat": "flake-compat",
         "flake-utils": "flake-utils",
-        "msdk": "msdk",
         "nixpkgs": "nixpkgs"
       }
     },
