@@ -1,8 +1,8 @@
 .zig-cache/
 zig-out/
 __pycache__/
-/msdk/
 *.bin
 *.elf
 *.img
-/docs/
+/decoder/docs/
+*.egg-info/
