@@ -4,10 +4,10 @@ tasks:
   require-decoder:
     internal: true
     preconditions:
-      - sh: ls /dev/ttyACM0
+      - sh: ls /dev/ttyACM*
         msg: Decoder device not connected (physically connect the MAX78000 to your computer over USB and run the command again)
     cmds:
-      - '[ "$(stat -c %a /dev/ttyACM0)" != "777" ] && sudo chmod 777 /dev/ttyACM0 || true'
+      - '[ "$(stat -c %a /dev/ttyACM*)" != "777" ] && sudo chmod 777 /dev/ttyACM* || true'
 
   1-gen-secrets:
     desc: Generate secrets
@@ -31,7 +31,7 @@ tasks:
     deps:
       - task: require-decoder
     cmds:
-      - python -m ectf25.utils.flash ./build_out/max78000.bin /dev/ttyACM0
+      - python -m ectf25.utils.flash ./build_out/max78000.bin /dev/ttyACM*
 
   4-gen-subscription:
     desc: Generate a subscription
@@ -54,14 +54,14 @@ tasks:
       - sh: ls {{.FILE}}
         msg: Subscription '{{.FILE}}' does not exist
     cmds:
-      - python -m ectf25.tv.subscribe {{.FILE}} /dev/ttyACM0
+      - python -m ectf25.tv.subscribe {{.FILE}} /dev/ttyACM*
 
   6-list:
     desc: Asks the Decoder to list the subscriptions that it currently has
     deps:
       - task: require-decoder
     cmds:
-      - python -m ectf25.tv.list /dev/ttyACM0
+      - python -m ectf25.tv.list /dev/ttyACM*
 
   7-uplink:
     desc: Encodes sample frames with the custom encoder function and sends them to the satellite
@@ -86,7 +86,7 @@ tasks:
     deps:
       - task: require-decoder
     cmds:
-      - python -m ectf25.tv.run localhost 2001 /dev/ttyACM0
+      - python -m ectf25.tv.run localhost 2001 /dev/ttyACM*
 
   10-end-to-end:
     desc: Run a complete end to end test
