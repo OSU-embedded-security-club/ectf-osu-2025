@@ -10,6 +10,7 @@ own risk!
 Copyright: Copyright (c) 2025 The MITRE Corporation
 """
 
+import os
 import argparse
 import json
 from pathlib import Path
@@ -29,20 +30,12 @@ def gen_secrets(channels: list[int]) -> bytes:
 
     :returns: Contents of the secrets file
     """
-    # TODO: Update this function to generate any system-wide secrets needed by
-    #   your design
 
-    # Create the secrets object
-    # You can change this to generate any secret material
-    # The secrets file will never be shared with attackers
     secrets = {
         "channels": channels,
-        "some_secrets": "EXAMPLE",
+        "seeds": {str(channel): os.urandom(16).hex() for channel in channels},
     }
 
-    # NOTE: if you choose to use JSON for your file type, you will not be able to
-    # store binary data, and must either use a different file type or encode the
-    # binary data to hex, base64, or another type of ASCII-only encoding
     return json.dumps(secrets).encode()
 
 

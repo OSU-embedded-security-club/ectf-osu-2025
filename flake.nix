@@ -20,7 +20,7 @@
           version = "0.1.0";
           src = path;
           format = "pyproject";
-          propagatedBuildInputs = with pkgs.python3Packages; [ setuptools loguru pyserial tqdm ];
+          propagatedBuildInputs = with pkgs.python3Packages; [ setuptools loguru pyserial tqdm blake3 pycryptodome ];
         };
 
         toolsPackage = mkPythonPackage ./tools;

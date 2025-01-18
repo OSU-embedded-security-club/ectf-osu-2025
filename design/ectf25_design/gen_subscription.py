@@ -14,8 +14,23 @@ import argparse
 import json
 from pathlib import Path
 import struct
-
+from dataclasses import dataclass
 from loguru import logger
+from blake3 import blake3
+
+HASH_TREE_HEIGHT = 64
+LEFT_SALT = b"left"
+RIGHT_SALT = b"right"
+
+
+def hash(data: bytes):
+    return blake3(data).digest(length=16)
+
+
+@dataclass(frozen=True)
+class Root:
+    offset: int
+    power: int
 
 
 def gen_subscription(
@@ -31,19 +46,47 @@ def gen_subscription(
     :param end: Last timestamp the subscription is valid for
     :param channel: Channel to enable
     """
-    # TODO: Update this function to provide a Decoder with whatever data it needs to
-    #   subscribe to a new channel
 
-    # Load the json of the secrets file
     secrets = json.loads(secrets)
+    seed = bytes.fromhex(secrets["seeds"][str(channel)])
 
-    # You can use secrets generated using `gen_secrets` here like:
-    # secrets["some_secrets"]
-    # Which would return "EXAMPLE" in the reference design.
-    # Please note that the secrets are READ ONLY at this sage!
+    roots = get_roots(start, end)
+
+    for root in roots:
+        curr = seed
+        for i in range(HASH_TREE_HEIGHT, root.power - 1, -1):
+            if root.offset & (1 << i) == 0:
+                curr = hash(curr + LEFT_SALT)
+            else:
+                curr = hash(curr + RIGHT_SALT)
+        print(curr.hex())
 
     # Pack the subscription. This will be sent to the decoder with ectf25.tv.subscribe
     return struct.pack("<IQQI", device_id, start, end, channel)
+
+
+def ctz(x: int) -> int:
+    return ((x & -x) - 1).bit_count()
+
+
+def get_roots(a: int, b: int) -> list[Root]:
+    if a > b:
+        raise ValueError("no")
+
+    ranges = []
+
+    while a <= b:
+        power = 1
+        while (a + (1 << power) - 1) <= b and power <= ctz(a):
+            power += 1
+        power -= 1
+
+        end = a + (1 << power) - 1
+        ranges.append(Root(power=power, offset=a))
+
+        a = end + 1
+
+    return ranges
 
 
 def parse_args():
