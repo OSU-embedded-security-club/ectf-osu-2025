@@ -19,8 +19,8 @@ from loguru import logger
 from blake3 import blake3
 
 HASH_TREE_HEIGHT = 64
-LEFT_SALT = b"left"
-RIGHT_SALT = b"right"
+LEFT_SALT = b"L"
+RIGHT_SALT = b"R"
 
 
 def hash(data: bytes):
@@ -67,7 +67,10 @@ def gen_subscription(
 
 
 def ctz(x: int) -> int:
+    if x == 0:
+        return HASH_TREE_HEIGHT
     return ((x & -x) - 1).bit_count()
+
 
 
 def get_roots(a: int, b: int) -> list[Root]:

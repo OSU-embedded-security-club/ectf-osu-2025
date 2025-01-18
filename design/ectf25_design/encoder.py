@@ -17,8 +17,8 @@ from blake3 import blake3
 from Crypto.Cipher import Salsa20
 
 HASH_TREE_HEIGHT = 64
-LEFT_SALT = b"left"
-RIGHT_SALT = b"right"
+LEFT_SALT = b"L"
+RIGHT_SALT = b"R"
 
 
 def hash(data: bytes):
@@ -70,7 +70,7 @@ class Encoder:
             else:
                 curr = hash(curr + RIGHT_SALT)
 
-        encrypted_frame = Salsa20.new(key=curr).encrypt(frame)
+        encrypted_frame = Salsa20.new(key=curr+curr, nonce=bytes([0 for _ in range(8)])).encrypt(frame)
 
         return struct.pack("<IQ", channel, timestamp) + encrypted_frame
 
