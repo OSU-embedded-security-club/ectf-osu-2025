@@ -52,6 +52,8 @@ def gen_subscription(
 
     roots = get_roots(start, end)
 
+
+    hashes = []
     for root in roots:
         curr = seed
         for i in range(HASH_TREE_HEIGHT, root.power - 1, -1):
@@ -59,10 +61,9 @@ def gen_subscription(
                 curr = hash(curr + LEFT_SALT)
             else:
                 curr = hash(curr + RIGHT_SALT)
-        print(curr.hex())
-
+        hashes.append(curr)
     # Pack the subscription. This will be sent to the decoder with ectf25.tv.subscribe
-    return struct.pack("<IQQI", device_id, start, end, channel)
+    return struct.pack("<IQQI", device_id, start, end, channel) + b''.join(hashes)
 
 
 def ctz(x: int) -> int:
