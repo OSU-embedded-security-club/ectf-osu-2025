@@ -1,5 +1,9 @@
 const std = @import("std");
 
+comptime {
+    _ = @import("hashtree.zig");
+}
+
 /// An allocated value and its `deinit` function
 pub fn Owned(comptime T: type) type {
     return struct {
