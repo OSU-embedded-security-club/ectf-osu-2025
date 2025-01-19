@@ -25,6 +25,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Install python design tools
+      run: |
+        python -m pip install -e ./design/
+
+    - name: Generate secrets
+      run: |
+        python -m ectf25_design.gen_secrets -f secrets/secrets.json 1 2 3
+
     - name: Install zig
       uses: mlugg/setup-zig@v1
       with:
@@ -39,6 +47,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+
+    - name: Install python design tools
+      run: |
+        python -m pip install -e ./design/
+
+    - name: Generate secrets
+      run: |
+        python -m ectf25_design.gen_secrets -f secrets/secrets.json 1 2 3
 
     - name: Install zig
       uses: mlugg/setup-zig@v1

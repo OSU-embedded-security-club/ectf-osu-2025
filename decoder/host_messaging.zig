@@ -68,10 +68,17 @@ const ListChannelResponse = extern struct {
     }
 };
 
-pub fn list() !void {
-    var listChannelResponse = ListChannelResponse{ .num_channels = 2 };
-    listChannelResponse.subscriptions[0] = SubscriptionEntry{ .channel_id = 1, .start = 1, .end = 2 };
-    listChannelResponse.subscriptions[1] = SubscriptionEntry{ .channel_id = 2, .start = 3, .end = 4 };
+pub fn list(subscriptions: *[8]?Subscription) !void {
+    var listChannelResponse = ListChannelResponse{ .num_channels = 0 };
+
+    var channelIndex: usize = 0;
+    for (subscriptions, 0..) |subscription, i| {
+        if (subscription) |sub| {
+            listChannelResponse.subscriptions[channelIndex] = SubscriptionEntry{ .channel_id = i + 1, .start = sub.start, .end = sub.end };
+            channelIndex += 1;
+        }
+    }
+    listChannelResponse.num_channels = channelIndex;
 
     const body = listChannelResponse.asBytes();
 
@@ -89,38 +96,30 @@ const SubscribeHeader = extern struct {
     channel: u8 align(1),
 };
 
-const Subscription = struct {
+pub const Subscription = struct {
     start: u64,
     end: u64,
     num_hashes: u7,
     hashes: [126][16]u8 = undefined,
 };
 
-var subscriptions = [8]?Subscription{ null, null, null, null, null, null, null, null };
-
-pub fn subscribe(body: []u8) !void {
-    // debugMessage("Subscribe got body {any}", .{body});
-
+pub fn subscribe(body: []u8, subscriptions: *[8]?Subscription) !void {
     const key = secrets.subscriptionKey;
-    debugMessage("RECEIVED DATA {}", .{std.fmt.fmtSliceHexLower(body)});
     std.crypto.stream.salsa.Salsa20.xor(body, body, 0, key, std.mem.zeroes([8]u8));
-    debugMessage("DECRYPTED {}", .{std.fmt.fmtSliceHexLower(body)});
 
     const header: *const SubscribeHeader = @ptrCast(body.ptr);
-    subscriptions[header.channel] = .{
+    const sub = &subscriptions[header.channel - 1];
+
+    sub.* = .{
         .start = header.start,
         .end = header.end,
         .num_hashes = @truncate((body.len - @sizeOf(SubscribeHeader)) / 16),
     };
-    debugMessage("START {} END {} NUM_HASHES {}", .{ header.start, header.end, subscriptions[header.channel].?.num_hashes });
-    // @memcpy(std.mem.asBytes(&subscriptions[header.channel].?.hashes), body[@sizeOf(SubscribeHeader)..]);
 
-    // _ = header; // autofix
     var iter = std.mem.window(u8, body[@sizeOf(SubscribeHeader)..], 16, 16);
     var i: usize = 0;
     while (iter.next()) |hash| {
-        debugMessage("{} {}", .{ i, std.fmt.fmtSliceHexLower(hash) });
-        @memcpy(&subscriptions[header.channel].?.hashes[i], hash);
+        @memcpy(&sub.*.?.hashes[i], hash);
         i += 1;
     }
 

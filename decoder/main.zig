@@ -65,13 +65,15 @@ pub fn run() !void {
 
     msdk.LED_On(msdk.LED2);
 
+    var subscriptions = [8]?messaging.Subscription{ null, null, null, null, null, null, null, null };
+
     var n: usize = 0;
     while (true) : (n += 1) {
-        process() catch continue;
+        process(&subscriptions) catch continue;
     }
 }
 
-fn process() !void {
+fn process(subscriptions: *[8]?messaging.Subscription) !void {
     while (try uart.readByte() != messaging.Magic) {}
     const opcode = try uart.readByte();
     const length: u16 = (try uart.readByte()) + (@as(u16, try uart.readByte()) << 8);
@@ -87,7 +89,7 @@ fn process() !void {
             }
 
             messaging.ack();
-            try messaging.list();
+            try messaging.list(subscriptions);
             return;
         },
         else => {
@@ -106,7 +108,7 @@ fn process() !void {
 
     switch (opcode) {
         'D' => try messaging.decode(body),
-        'S' => try messaging.subscribe(body),
+        'S' => try messaging.subscribe(body, subscriptions),
         else => unreachable,
     }
 }

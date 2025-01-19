@@ -249,7 +249,7 @@ endif
 MXC_OPTIMIZE_CFLAGS ?= -O2
 
 # Set compiler flags
-PROJ_CFLAGS += -Wall -Wno-unused-const-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-incompatible-pointer-types # Enable warnings
+PROJ_CFLAGS += -Wall -Wno-main -Wno-unused-variable -Wno-unused-const-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-incompatible-pointer-types # Enable warnings
 PROJ_CFLAGS+=-DDECODER_ID=$(DECODER_ID)
 ifeq ($(CRYPTO_EXAMPLE), 1)
 PROJ_CFLAGS += -DMXC_ASSERT_ENABLE

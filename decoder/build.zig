@@ -131,7 +131,7 @@ pub fn build(b: *std.Build) !void {
 
 fn getSubscriptionKey(allocator: std.mem.Allocator) ![32]u8 {
     const env = try std.process.getEnvMap(allocator);
-    const secrets_path = env.get("SECRETS") orelse "/secrets/secrets.json";
+    const secrets_path = env.get("SECRETS") orelse "../secrets/secrets.json";
     const file = try std.fs.cwd().openFile(secrets_path, .{});
     defer file.close();
 
@@ -145,7 +145,7 @@ fn getSubscriptionKey(allocator: std.mem.Allocator) ![32]u8 {
     const secrets = try std.json.parseFromSlice(Secrets, allocator, contents, .{ .ignore_unknown_fields = true });
     defer secrets.deinit();
 
-    const deviceId = env.get("DECODER_ID").?;
+    const deviceId = env.get("DECODER_ID") orelse "0xdeadbeef";
     const deviceIdInt = try std.fmt.parseInt(u32, deviceId, 0);
     const deviceSubscriptionStr = try std.fmt.allocPrint(allocator, "{s}{x:0>8}", .{ secrets.value.subscription_key, deviceIdInt });
     var deviceSubscriptionKey: [32]u8 = undefined;
