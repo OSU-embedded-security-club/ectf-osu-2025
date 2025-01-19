@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const crypto = @import("crypto.zig");
+
 const HASH_TREE_HEIGHT = 64;
 const LEFT_SALT = 'L';
 const RIGHT_SALT = 'R';
@@ -60,13 +62,6 @@ const RootPosition = struct {
     offset: u64,
     power: u7,
 };
-
-fn decrypt(data: []u8, key: [16]u8) void {
-    var extendedKey: [32]u8 = undefined;
-    @memcpy(extendedKey[0..16], key[0..16]);
-    @memcpy(extendedKey[16..32], key[0..16]);
-    std.crypto.stream.salsa.Salsa20.xor(data, data, 0, extendedKey, std.mem.zeroes([8]u8));
-}
 
 test "ctz" {
     try std.testing.expectEqual(64, @ctz(@as(u64, 0)));
@@ -134,7 +129,7 @@ test "getKey example" {
     try std.testing.expectEqual(bytes("1ecf7fc4dd1bda2a593fb7f7d0959b1f"), key);
 
     var frameData = bytes("b669a858d2f9c5d3b2c5a85ca98c46bc3557740a9260ce921523a352fdc71c5779a741c2de4b3fe94ecb8cbf15804e609acf2be1056da0c1cb5dfa8bdbb99486");
-    decrypt(&frameData, key);
+    crypto.decrypt(&frameData, key);
     try std.testing.expectEqualStrings("Hello world!----------------------------------------------------", &frameData);
 }
 
@@ -157,7 +152,7 @@ test "getKey largest range" {
     try std.testing.expectEqual(bytes("50433b2d0ab5d7859c88c646f2379ffd"), key);
 
     var frameData = bytes("dc2128afcbec2c89326d84ce6374b02e0e863031e9618361824648b209c8c44caff4d68f0654ec7e1de087ccfdbd20814a62beae2b6d899104b926b06bc03dae");
-    decrypt(&frameData, key);
+    crypto.decrypt(&frameData, key);
     try std.testing.expectEqualStrings("Hola Mundo------------------------------------------------------", &frameData);
 }
 
@@ -180,7 +175,7 @@ test "getKey single value range" {
     try std.testing.expectEqual(bytes("b494fb2651d4beba877f96fa6f6049ee"), key);
 
     var frameData = bytes("87c544979d7df0237bb5e0791e08e1288cb6bf3090cba085d1c9a37f265fadbcb613587ed4c6e09f49b8d96a0a18c1d5d3c96ebc9c18377b9f59e769e3a6c4f8");
-    decrypt(&frameData, key);
+    crypto.decrypt(&frameData, key);
     try std.testing.expectEqualStrings("Hallo Welt------------------------------------------------------", &frameData);
 }
 
@@ -198,7 +193,7 @@ test "getKey most suboptimal" {
     try std.testing.expectEqual(bytes("7d4812bb046d7c7c30cf7d4380574a6c"), key);
 
     var frameData = bytes("d993a63f87a36ba26e73c3a727f07f2efc4fac720c9f5f42f3993c01a950d4b719c8cd5d3d606b11fef1417deea1499e03ca83ae0f9fb4e1f290e6e3865bdab9");
-    decrypt(&frameData, key);
+    crypto.decrypt(&frameData, key);
     try std.testing.expectEqualStrings("Bonjour le monde------------------------------------------------", &frameData);
 }
 

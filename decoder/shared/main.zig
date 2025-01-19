@@ -1,8 +1,7 @@
 const std = @import("std");
 
-comptime {
-    _ = @import("hashtree.zig");
-}
+pub const hashtree = @import("hashtree.zig");
+pub const crypto = @import("crypto.zig");
 
 /// An allocated value and its `deinit` function
 pub fn Owned(comptime T: type) type {

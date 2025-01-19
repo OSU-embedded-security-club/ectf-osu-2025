@@ -42,6 +42,10 @@
 
           GCC_ARM_EMBDEDDED = pkgs.gcc-arm-embedded;
           MAXIM_PATH = msdk;
+
+          shellHook = ''
+            export SECRETS=$PWD/secrets/secrets.json
+          '';
         };
       }
     );

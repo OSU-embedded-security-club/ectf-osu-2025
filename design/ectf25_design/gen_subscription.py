@@ -17,6 +17,7 @@ import struct
 from dataclasses import dataclass
 from loguru import logger
 from blake3 import blake3
+from Crypto.Cipher import Salsa20
 
 HASH_TREE_HEIGHT = 64
 LEFT_SALT = b"L"
@@ -61,9 +62,15 @@ def gen_subscription(
                 curr = hash(curr + LEFT_SALT)
             else:
                 curr = hash(curr + RIGHT_SALT)
+        print(root, curr.hex())
         hashes.append(curr)
+
+    subscription_key = bytes.fromhex(secrets["subscription_key"])
+    print(f"{subscription_key.hex()}{device_id:08x}")
+    key = blake3(f"{subscription_key.hex()}{device_id:08x}".encode()).digest()
+
     # Pack the subscription. This will be sent to the decoder with ectf25.tv.subscribe
-    return struct.pack("<IQQI", device_id, start, end, channel) + b''.join(hashes)
+    return Salsa20.new(key=key, nonce=bytes(0 for i in range(8))).encrypt(struct.pack("<QQB", start, end, channel) + b''.join(hashes))
 
 
 def ctz(x: int) -> int:

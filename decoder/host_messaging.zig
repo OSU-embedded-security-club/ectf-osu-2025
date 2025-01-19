@@ -1,6 +1,11 @@
 const std = @import("std");
 const msdk = @import("msdk");
 
+const shared = @import("shared");
+const crypto = shared.crypto;
+
+const secrets = @import("secrets");
+
 const uart = @import("uart.zig");
 
 pub const Magic = '%';
@@ -78,8 +83,47 @@ pub fn decode(body: []const u8) !void {
     try sendMessageWithAcks('D', body);
 }
 
-pub fn subscribe(body: []const u8) !void {
-    debugMessage("Subscribe got body {any}", .{body});
+const SubscribeHeader = extern struct {
+    start: u64 align(1),
+    end: u64 align(1),
+    channel: u8 align(1),
+};
+
+const Subscription = struct {
+    start: u64,
+    end: u64,
+    num_hashes: u7,
+    hashes: [126][16]u8 = undefined,
+};
+
+var subscriptions = [8]?Subscription{ null, null, null, null, null, null, null, null };
+
+pub fn subscribe(body: []u8) !void {
+    // debugMessage("Subscribe got body {any}", .{body});
+
+    const key = secrets.subscriptionKey;
+    debugMessage("RECEIVED DATA {}", .{std.fmt.fmtSliceHexLower(body)});
+    std.crypto.stream.salsa.Salsa20.xor(body, body, 0, key, std.mem.zeroes([8]u8));
+    debugMessage("DECRYPTED {}", .{std.fmt.fmtSliceHexLower(body)});
+
+    const header: *const SubscribeHeader = @ptrCast(body.ptr);
+    subscriptions[header.channel] = .{
+        .start = header.start,
+        .end = header.end,
+        .num_hashes = @truncate((body.len - @sizeOf(SubscribeHeader)) / 16),
+    };
+    debugMessage("START {} END {} NUM_HASHES {}", .{ header.start, header.end, subscriptions[header.channel].?.num_hashes });
+    // @memcpy(std.mem.asBytes(&subscriptions[header.channel].?.hashes), body[@sizeOf(SubscribeHeader)..]);
+
+    // _ = header; // autofix
+    var iter = std.mem.window(u8, body[@sizeOf(SubscribeHeader)..], 16, 16);
+    var i: usize = 0;
+    while (iter.next()) |hash| {
+        debugMessage("{} {}", .{ i, std.fmt.fmtSliceHexLower(hash) });
+        @memcpy(&subscriptions[header.channel].?.hashes[i], hash);
+        i += 1;
+    }
+
     try sendMessageWithAcks('S', &.{});
 }
 

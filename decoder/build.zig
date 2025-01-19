@@ -22,6 +22,10 @@ pub fn build(b: *std.Build) !void {
 
     const env = try std.process.getEnvMap(b.allocator);
 
+    var options = b.addOptions();
+    const subscriptionkey = try getSubscriptionKey(b.allocator);
+    options.addOption(@TypeOf(subscriptionkey), "subscriptionKey", subscriptionkey);
+
     if (env.get("MAXIM_PATH")) |msdk_path| {
         const msdk = b.addTranslateC(.{
             .root_source_file = b.path("msdk_includes.h"),
@@ -91,6 +95,7 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path("shared/main.zig"),
     });
 
+    decoderExe.root_module.addOptions("secrets", options);
     decoderExe.root_module.addImport("shared", sharedModule);
 
     const lib_dir_step = try ZigLibDir.create(b);
@@ -122,6 +127,32 @@ pub fn build(b: *std.Build) !void {
     docs_step.dependOn(&install_docs.step);
 
     decoderStep.dependOn(&decoderExe.step);
+}
+
+fn getSubscriptionKey(allocator: std.mem.Allocator) ![32]u8 {
+    const env = try std.process.getEnvMap(allocator);
+    const secrets_path = env.get("SECRETS") orelse "/secrets/secrets.json";
+    const file = try std.fs.cwd().openFile(secrets_path, .{});
+    defer file.close();
+
+    const contents = try file.readToEndAlloc(allocator, 8192);
+    defer allocator.free(contents);
+
+    const Secrets = struct {
+        subscription_key: []const u8,
+    };
+
+    const secrets = try std.json.parseFromSlice(Secrets, allocator, contents, .{ .ignore_unknown_fields = true });
+    defer secrets.deinit();
+
+    const deviceId = env.get("DECODER_ID").?;
+    const deviceIdInt = try std.fmt.parseInt(u32, deviceId, 0);
+    const deviceSubscriptionStr = try std.fmt.allocPrint(allocator, "{s}{x:0>8}", .{ secrets.value.subscription_key, deviceIdInt });
+    var deviceSubscriptionKey: [32]u8 = undefined;
+    std.debug.print("{s}\n", .{deviceSubscriptionStr});
+    std.crypto.hash.Blake3.hash(deviceSubscriptionStr, &deviceSubscriptionKey, .{});
+
+    return deviceSubscriptionKey;
 }
 
 const ZigLibDir = struct {

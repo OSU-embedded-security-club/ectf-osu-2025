@@ -42,6 +42,7 @@ RUN curl -L "https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz"
 
 ENV MAXIM_PATH=/root/msdk-2024_02
 ENV ZIG_LOCAL_CACHE_DIR=/root/zig-cache
+ENV SECRETS_PATH=/secrets/secrets.json
 
 WORKDIR /decoder
 
