@@ -1,5 +1,6 @@
 const std = @import("std");
 const msdk = @import("msdk");
+const ed25519 = @import("ed25519");
 
 const shared = @import("shared");
 const crypto = shared.crypto;
@@ -69,6 +70,13 @@ const ListChannelResponse = extern struct {
 };
 
 pub fn list(subscriptions: *[8]?Subscription) !void {
+    const pubkey = shared.bytes("309752a82e31a9a84456447312b3e4e1e201481ba050a4fb261a86e5697d35e9");
+    const sig = shared.bytes("d6023e1f1b2243600363aedea46be1a1ef7dda59279f73982bb44db80b216c2d31f61bbb0037eae57c0887a6dda9bf53d5e02af3f48fc7da5d8aad72d38bc501");
+    const message = "John Hancock";
+
+    const good = ed25519.ed25519_verify(&sig, message, message.len, &pubkey);
+    debugMessage("Sigature verification = {}", .{good});
+
     var listChannelResponse = ListChannelResponse{ .num_channels = 0 };
 
     var channelIndex: usize = 0;

@@ -1,4 +1,5 @@
 const std = @import("std");
+const bytes = @import("shared").bytes;
 
 const crypto = @import("crypto.zig");
 
@@ -195,12 +196,6 @@ test "getKey most suboptimal" {
     var frameData = bytes("d993a63f87a36ba26e73c3a727f07f2efc4fac720c9f5f42f3993c01a950d4b719c8cd5d3d606b11fef1417deea1499e03ca83ae0f9fb4e1f290e6e3865bdab9");
     crypto.decrypt(&frameData, key);
     try std.testing.expectEqualStrings("Bonjour le monde------------------------------------------------", &frameData);
-}
-
-fn bytes(comptime hex: []const u8) [hex.len / 2]u8 {
-    comptime var result = std.mem.zeroes([hex.len / 2]u8);
-    _ = comptime std.fmt.hexToBytes(&result, hex) catch @compileError("invalid hex: " ++ hex);
-    return result;
 }
 
 // pub fn encode(secret: [16]u8, timestamp: u64, frame: [64]u8) void {

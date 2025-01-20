@@ -1,0 +1,1 @@
+#include "src/ed25519.h"

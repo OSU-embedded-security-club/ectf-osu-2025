@@ -41,12 +41,20 @@ RUN curl -L "https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz"
     rm zig.tar.xz
 
 ENV MAXIM_PATH=/root/msdk-2024_02
+
+RUN curl -L "https://github.com/orlp/ed25519/archive/refs/heads/master.zip" -o ed25519.zip && \
+    unzip ed25519.zip && \
+    rm ed25519.zip
+
+ENV ED25519_PATH=/root/ed25519-master
+
 ENV ZIG_LOCAL_CACHE_DIR=/root/zig-cache
 ENV SECRETS_PATH=/secrets/secrets.json
 
 WORKDIR /decoder
 
 ENTRYPOINT ["bash", "-c", "make release DECODER_ID=${DECODER_ID}"]
+# ENTRYPOINT ["/bin/sh"]
 
 # Sample run command:
 # docker run --rm -v ./build_out:/out -v ./:/decoder -v ./secrets:/secrets -e DECODER_ID=0xdeadbeef decoder

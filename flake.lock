@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "ed25519": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1664751988,
+        "narHash": "sha256-YC7R05Z1tRi9XbTtdJNjNhJYKPGrJj6awob7NhXgF3w=",
+        "owner": "orlp",
+        "repo": "ed25519",
+        "rev": "b1f19fab4aebe607805620d25a5e42566ce46a0e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "orlp",
+        "repo": "ed25519",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -53,6 +69,7 @@
     },
     "root": {
       "inputs": {
+        "ed25519": "ed25519",
         "flake-utils": "flake-utils",
         "msdk": "msdk",
         "nixpkgs": "nixpkgs"

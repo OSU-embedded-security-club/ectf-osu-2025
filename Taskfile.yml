@@ -93,3 +93,10 @@ tasks:
     deps:
       - task: uplink
       - task: delayed-satellite
+
+  shell:
+    desc: Spawn a shell in the docker container
+    dir: decoder
+    cmds:
+      - docker build -t decoder .
+      - docker run --rm -v ./build_out:/out -v ./:/decoder -v ./../secrets:/secrets -e DECODER_ID={{.DECODER_ID}} -it --entrypoint /bin/bash decoder

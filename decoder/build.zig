@@ -20,6 +20,13 @@ pub fn build(b: *std.Build) !void {
         .link_libc = true,
     });
 
+    const unit_tests = b.addTest(.{
+        .root_source_file = b.path("shared/main.zig"),
+        .target = b.resolveTargetQuery(.{}),
+        .link_libc = true,
+    });
+    const test_step = b.step("test", "Run unit tests");
+
     const env = try std.process.getEnvMap(b.allocator);
 
     var options = b.addOptions();
@@ -91,6 +98,47 @@ pub fn build(b: *std.Build) !void {
         decoderStep.dependOn(&msdk.step);
     }
 
+    if (env.get("ED25519_PATH")) |ed25519_path| {
+        const ed25519 = b.addTranslateC(.{
+            .root_source_file = b.path("ed25519_includes.h"),
+            .target = target,
+            .optimize = .ReleaseSafe,
+            .link_libc = false,
+        });
+
+        ed25519.addIncludeDir(ed25519_path);
+
+        unit_tests.addIncludePath(.{ .cwd_relative = ed25519_path });
+
+        ed25519.defineCMacroRaw("ED25519_NO_SEED");
+
+        unit_tests.defineCMacro("ED25519_NO_SEED", null);
+
+        ed25519.addIncludeDir(try std.fs.path.join(b.allocator, &[_][]const u8{ env.get("GCC_ARM_EMBDEDDED") orelse "/usr/lib", "arm-none-eabi/include" }));
+
+        const ed25519Module = ed25519.createModule();
+        decoderExe.root_module.addImport("ed25519", ed25519Module);
+        unit_tests.addIncludePath(b.path("."));
+        unit_tests.root_module.addImport("ed25519", ed25519Module);
+
+        unit_tests.addCSourceFiles(.{ .root = .{ .cwd_relative = ed25519_path }, .files = &.{
+            "src/add_scalar.c",
+            "src/fe.c",
+            "src/ge.c",
+            "src/key_exchange.c",
+            "src/keypair.c",
+            "src/sc.c",
+            "src/seed.c",
+            "src/sha512.c",
+            "src/sign.c",
+            "src/verify.c",
+        } });
+
+        // decoderStep.dependOn(&b.addInstallFile(msdk.getOutput(), "msdk.zig").step);
+        decoderStep.dependOn(&ed25519.step);
+        test_step.dependOn(&ed25519.step);
+    }
+
     const sharedModule = b.createModule(.{
         .root_source_file = b.path("shared/main.zig"),
     });
@@ -104,12 +152,7 @@ pub fn build(b: *std.Build) !void {
 
     decoderStep.dependOn(&b.addInstallArtifact(decoderExe, .{ .dest_dir = .{ .override = .{ .custom = "../c/src" } } }).step);
 
-    const unit_tests = b.addTest(.{
-        .root_source_file = b.path("shared/main.zig"),
-        .target = b.resolveTargetQuery(.{}),
-    });
     const run_unit_tests = b.addRunArtifact(unit_tests);
-    const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
 
     const docs = b.addObject(.{

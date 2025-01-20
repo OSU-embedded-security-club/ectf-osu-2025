@@ -8,9 +8,13 @@
       url = "github:Analog-Devices-MSDK/msdk/v2024_02?shallow=1";
       flake = false;
     };
+    ed25519 = {
+      url = "github:orlp/ed25519";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, msdk }:
+  outputs = { self, nixpkgs, flake-utils, msdk, ed25519 }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
@@ -42,6 +46,7 @@
 
           GCC_ARM_EMBDEDDED = pkgs.gcc-arm-embedded;
           MAXIM_PATH = msdk;
+          ED25519_PATH = ed25519;
 
           shellHook = ''
             export SECRETS=$PWD/secrets/secrets.json

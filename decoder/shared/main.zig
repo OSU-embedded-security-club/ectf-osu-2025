@@ -103,3 +103,9 @@ pub fn msdkTry(err: c_int) MSDKError!void {
 test "sugma tests" {
     std.debug.print("sugma testing\n", .{});
 }
+
+pub fn bytes(comptime hex: []const u8) [hex.len / 2]u8 {
+    comptime var result = std.mem.zeroes([hex.len / 2]u8);
+    _ = comptime std.fmt.hexToBytes(&result, hex) catch @compileError("invalid hex: " ++ hex);
+    return result;
+}

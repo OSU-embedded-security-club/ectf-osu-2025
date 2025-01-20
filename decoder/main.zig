@@ -2,6 +2,7 @@ const std = @import("std");
 
 const shared = @import("shared");
 const msdk = @import("msdk");
+const ed25519 = @import("ed25519");
 
 const uart = @import("uart.zig");
 const messaging = @import("host_messaging.zig");
