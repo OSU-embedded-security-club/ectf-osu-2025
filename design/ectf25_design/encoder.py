@@ -15,6 +15,8 @@ import struct
 import json
 from blake3 import blake3
 from Crypto.Cipher import Salsa20
+from Crypto.Signature import eddsa
+from Crypto.PublicKey import ECC
 
 HASH_TREE_HEIGHT = 64
 LEFT_SALT = b"L"
@@ -27,6 +29,7 @@ def hash(data: bytes):
 
 class Encoder:
     seeds: dict[int, bytes]
+    signer: eddsa.EdDSASigScheme
 
     def __init__(self, secrets: bytes):
         """
@@ -41,6 +44,7 @@ class Encoder:
             int(channel): bytes.fromhex(seed)
             for channel, seed in secrets["seeds"].items()
         }
+        self.signer = eddsa.new(ECC.import_key(secrets["private_key"]), "rfc8032")
 
     def encode(self, channel: int, frame: bytes, timestamp: int) -> bytes:
         """The frame encoder function
@@ -61,18 +65,23 @@ class Encoder:
         :returns: The encoded frame, which will be sent to the Decoder
         """
         if channel == 0:
-            return struct.pack("<IQ", channel, timestamp) + frame
+            message = struct.pack("<IQ", channel, timestamp) + frame
+        else:
+            curr = self.seeds[channel]
+            for i in range(HASH_TREE_HEIGHT, -1, -1):
+                if timestamp & (1 << i) == 0:
+                    curr = hash(curr + LEFT_SALT)
+                else:
+                    curr = hash(curr + RIGHT_SALT)
 
-        curr = self.seeds[channel]
-        for i in range(HASH_TREE_HEIGHT, -1, -1):
-            if timestamp & (1 << i) == 0:
-                curr = hash(curr + LEFT_SALT)
-            else:
-                curr = hash(curr + RIGHT_SALT)
+            print(f"{(curr+curr).hex()=}")
 
-        encrypted_frame = Salsa20.new(key=curr+curr, nonce=bytes([0 for _ in range(8)])).encrypt(frame)
+            encrypted_frame = Salsa20.new(key=curr+curr, nonce=bytes([0 for _ in range(8)])).encrypt(frame)
 
-        return struct.pack("<IQ", channel, timestamp) + encrypted_frame
+            message = struct.pack("<IQ", channel, timestamp) + encrypted_frame
+
+        signature = self.signer.sign(message)
+        return message + signature
 
 
 def main():

@@ -59,7 +59,7 @@ pub fn getKey(roots: []RootPosition, rootHashes: []const [16]u8, timestamp: u64,
     @memcpy(outKey, buf[0..16]);
 }
 
-const RootPosition = struct {
+pub const RootPosition = struct {
     offset: u64,
     power: u7,
 };

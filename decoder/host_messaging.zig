@@ -92,9 +92,51 @@ pub fn list(subscriptions: *[8]?Subscription) !void {
     try sendMessageWithAcks('L', body);
 }
 
-pub fn decode(body: []const u8) !void {
-    debugMessage("Decode got body {any}", .{body});
-    try sendMessageWithAcks('D', body);
+const Decode = extern struct {
+    channel: u32 align(1),
+    timestamp: u64 align(1),
+    message: [64]u8 align(1),
+    signature: [64]u8 align(1),
+};
+
+pub fn decode(body: []u8, subscriptions: *[8]?Subscription) !void {
+    if (body.len != @sizeOf(Decode)) {
+        debugMessage("BAD LENGTH FOR DECODE: {}", .{body.len});
+        return error.BadLength;
+    }
+    const dec: *Decode = @ptrCast(body.ptr);
+    debugMessage("CHANNEL {any} TIMESTAMP {any} MESSAGE {} SIGNATURE {}", .{ dec.channel, dec.timestamp, std.fmt.fmtSliceHexLower(&dec.message), std.fmt.fmtSliceHexLower(&dec.signature) });
+
+    const message = body[0..@offsetOf(Decode, "signature")];
+    const good = ed25519.ed25519_verify(&dec.signature, message.ptr, message.len, &secrets.publicKey);
+    if (good == 0) {
+        debugMessage("Invalid signature", .{});
+        return error.InvalidSignature;
+    }
+
+    if (dec.channel != 0) {
+        if (dec.channel - 1 >= subscriptions.len) {
+            debugMessage("Channel too large", .{});
+            return error.ChannelTooLarge;
+        }
+        const subscription: Subscription = subscriptions[dec.channel - 1] orelse {
+            debugMessage("No subscription", .{});
+            return error.NoSubscription;
+        };
+        debugMessage("SUBSCRIPTION START {} END {}", .{ subscription.start, subscription.end });
+        if (dec.timestamp < subscription.start or subscription.end < dec.timestamp) {
+            debugMessage("Not in subscription time range", .{});
+            return error.NotInSubscriptionTimeRange;
+        }
+        var roots: [126]shared.hashtree.RootPosition = undefined;
+        _ = shared.hashtree.getRootPositions(subscription.start, subscription.end, &roots);
+        var key: [16]u8 = undefined;
+        shared.hashtree.getKey(&roots, &subscription.hashes, dec.timestamp, &key);
+
+        shared.crypto.decrypt(&dec.message, key);
+    }
+
+    try sendMessageWithAcks('D', &dec.message);
 }
 
 const SubscribeHeader = extern struct {

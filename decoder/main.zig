@@ -108,7 +108,7 @@ fn process(subscriptions: *[8]?messaging.Subscription) !void {
     }
 
     switch (opcode) {
-        'D' => try messaging.decode(body),
+        'D' => try messaging.decode(body, subscriptions),
         'S' => try messaging.subscribe(body, subscriptions),
         else => unreachable,
     }
