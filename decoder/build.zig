@@ -6,8 +6,8 @@ pub fn build(b: *std.Build) !void {
 
     const target = b.resolveTargetQuery(.{
         .cpu_arch = .thumb,
-        .abi = .eabi,
         .os_tag = .freestanding,
+        .abi = .eabi,
         .cpu_model = .{ .explicit = &std.Target.arm.cpu.cortex_m4 },
         .ofmt = .c,
     });
@@ -18,6 +18,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .name = "main",
         .link_libc = true,
+        .optimize = .ReleaseSmall,
     });
 
     const unit_tests = b.addTest(.{
@@ -30,8 +31,9 @@ pub fn build(b: *std.Build) !void {
     const env = try std.process.getEnvMap(b.allocator);
 
     var options = b.addOptions();
-    const subscriptionkey = try getSubscriptionKey(b.allocator);
-    options.addOption(@TypeOf(subscriptionkey), "subscriptionKey", subscriptionkey);
+    const secrets = try getSecrets(b.allocator);
+    options.addOption(@TypeOf(secrets.subscription_key), "subscriptionKey", secrets.subscription_key);
+    options.addOption(@TypeOf(secrets.public_key), "publicKey", secrets.public_key);
 
     if (env.get("MAXIM_PATH")) |msdk_path| {
         const msdk = b.addTranslateC(.{
@@ -107,18 +109,15 @@ pub fn build(b: *std.Build) !void {
         });
 
         ed25519.addIncludeDir(ed25519_path);
-
-        unit_tests.addIncludePath(.{ .cwd_relative = ed25519_path });
-
         ed25519.defineCMacroRaw("ED25519_NO_SEED");
+        ed25519.addIncludeDir(try std.fs.path.join(b.allocator, &[_][]const u8{ env.get("GCC_ARM_EMBDEDDED") orelse "/usr/lib", "arm-none-eabi/include" }));
 
         unit_tests.defineCMacro("ED25519_NO_SEED", null);
-
-        ed25519.addIncludeDir(try std.fs.path.join(b.allocator, &[_][]const u8{ env.get("GCC_ARM_EMBDEDDED") orelse "/usr/lib", "arm-none-eabi/include" }));
+        unit_tests.addIncludePath(.{ .cwd_relative = ed25519_path });
+        unit_tests.addIncludePath(b.path("."));
 
         const ed25519Module = ed25519.createModule();
         decoderExe.root_module.addImport("ed25519", ed25519Module);
-        unit_tests.addIncludePath(b.path("."));
         unit_tests.root_module.addImport("ed25519", ed25519Module);
 
         unit_tests.addCSourceFiles(.{ .root = .{ .cwd_relative = ed25519_path }, .files = &.{
@@ -134,7 +133,6 @@ pub fn build(b: *std.Build) !void {
             "src/verify.c",
         } });
 
-        // decoderStep.dependOn(&b.addInstallFile(msdk.getOutput(), "msdk.zig").step);
         decoderStep.dependOn(&ed25519.step);
         test_step.dependOn(&ed25519.step);
     }
@@ -172,7 +170,12 @@ pub fn build(b: *std.Build) !void {
     decoderStep.dependOn(&decoderExe.step);
 }
 
-fn getSubscriptionKey(allocator: std.mem.Allocator) ![32]u8 {
+const Secrets = struct {
+    subscription_key: [32]u8,
+    public_key: [32]u8,
+};
+
+fn getSecrets(allocator: std.mem.Allocator) !Secrets {
     const env = try std.process.getEnvMap(allocator);
     const secrets_path = env.get("SECRETS") orelse "../secrets/secrets.json";
     const file = try std.fs.cwd().openFile(secrets_path, .{});
@@ -181,21 +184,27 @@ fn getSubscriptionKey(allocator: std.mem.Allocator) ![32]u8 {
     const contents = try file.readToEndAlloc(allocator, 8192);
     defer allocator.free(contents);
 
-    const Secrets = struct {
+    const SecretsJson = struct {
         subscription_key: []const u8,
+        public_key: []const u8,
     };
 
-    const secrets = try std.json.parseFromSlice(Secrets, allocator, contents, .{ .ignore_unknown_fields = true });
+    const secrets = try std.json.parseFromSlice(SecretsJson, allocator, contents, .{ .ignore_unknown_fields = true });
     defer secrets.deinit();
 
     const deviceId = env.get("DECODER_ID") orelse "0xdeadbeef";
     const deviceIdInt = try std.fmt.parseInt(u32, deviceId, 0);
     const deviceSubscriptionStr = try std.fmt.allocPrint(allocator, "{s}{x:0>8}", .{ secrets.value.subscription_key, deviceIdInt });
     var deviceSubscriptionKey: [32]u8 = undefined;
-    std.debug.print("{s}\n", .{deviceSubscriptionStr});
     std.crypto.hash.Blake3.hash(deviceSubscriptionStr, &deviceSubscriptionKey, .{});
 
-    return deviceSubscriptionKey;
+    var publicKey: [32]u8 = undefined;
+    _ = try std.fmt.hexToBytes(&publicKey, secrets.value.public_key);
+
+    return Secrets{
+        .subscription_key = deviceSubscriptionKey,
+        .public_key = publicKey,
+    };
 }
 
 const ZigLibDir = struct {

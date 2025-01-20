@@ -17,6 +17,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from Crypto.Signature import eddsa
 
 def gen_secrets(channels: list[int]) -> bytes:
     """Generate the contents secrets file
@@ -31,13 +32,21 @@ def gen_secrets(channels: list[int]) -> bytes:
     :returns: Contents of the secrets file
     """
 
+    keypair = eddsa.import_private_key(os.urandom(32))
+    signer = eddsa.new(keypair, "rfc8032")
+    data = b'John Hancock'
+    signature = signer.sign(data)
+
+    print(f"{signature.hex()=}")
+
     secrets = {
-        "channels": channels,
         "seeds": {str(channel): os.urandom(16).hex() for channel in channels},
         "subscription_key": os.urandom(32).hex(),
+        "public_key": keypair.public_key().export_key(format="raw").hex(),
+        "private_key": keypair.export_key(format="PEM"),
     }
 
-    return json.dumps(secrets).encode()
+    return json.dumps(secrets, indent=2).encode()
 
 
 def parse_args():
