@@ -31,11 +31,9 @@ pub fn flash_simple_erase_page(address: u32) i32 {
     return msdk.MXC_FLC_PageErase(address);
 }
 
-pub fn flash_simple_read(address: u32, buffer: []u8, size: u32) void {
-    msdk.MXC_FLC_Read(address, buffer, size);
+pub fn flash_simple_read(address: u32, buffer: []u8) void {
+    msdk.MXC_FLC_Read(address, buffer.ptr, buffer.len);
 }
-
-pub fn flash_simple_write(address: u32, buffer: []u8, size: u32) i32 {
-    _ = buffer; // autofix
-    return msdk.MXC_FLC_Write(address, size.buffer);
+pub fn flash_simple_write(address: u32, buffer: []u8) i32 {
+    return msdk.MXC_FLC_Write(address, buffer.len, buffer.ptr);
 }
