@@ -7,59 +7,11 @@ const ed25519 = @import("ed25519");
 const uart = @import("uart.zig");
 const messaging = @import("host_messaging.zig");
 
-pub const std_options: std.Options = .{
-    .logFn = usb_log,
-};
-
-pub const os = struct {
-    pub const heap = struct {
-        pub const page_allocator = std.heap.c_allocator;
-    };
-};
-
-/// Used to override Zig's default log function to work on the embedded, `freestanding` platform. Normally, Zig has a hard dependency on posix.
-///
-/// ```zig
-/// const shared = @import("shared");
-///
-/// // set the `std_options` global to bind this custom log function
-/// pub const std_options = .{
-///   .logFn = shared.usb_log,
-/// };
-/// ```
-pub fn usb_log(comptime level: std.log.Level, comptime scope: @TypeOf(.EnumLiteral), comptime format: []const u8, args: anytype) void {
-    const scope_name = @tagName(scope);
-    const level_name = level.asText();
-    try usb_writer.print("[{s}] ({s}): ", .{ level_name, scope_name });
-    try usb_writer.print(format, args);
-    try usb_writer.print("\n", .{});
-}
-
-const WriteError = error{};
-
-const usb_writer: std.io.GenericWriter(void, WriteError, usb_print) = .{
-    .context = undefined,
-};
-
-fn usb_print(_: void, text: []const u8) WriteError!usize {
-    for (text) |b| {
-        _ = msdk.putchar(b);
-    }
-    return text.len;
-}
-
 /// High level entrypoint for the decoder
 pub fn run() !void {
     try uart.init();
 
     messaging.debugMessage("Initialized UART", .{});
-
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .enable_memory_limit = true }){
-        .requested_memory_limit = 0x0001e000,
-    };
-    const allocator = gpa.allocator();
-    const arr = try allocator.alloc(i32, 10);
-    _ = arr; // autofix
 
     msdk.LED_Off(msdk.LED1);
     msdk.LED_Off(msdk.LED3);
@@ -120,7 +72,7 @@ pub export fn main() noreturn {
 
     var errored = false;
     run() catch |err| {
-        std.log.err("Top level fatal error: {}", .{err});
+        messaging.debugMessage("Fatal error {}", .{err});
         errored = true;
     };
 

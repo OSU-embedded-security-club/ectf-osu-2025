@@ -17,8 +17,7 @@ pub fn build(b: *std.Build) !void {
         .single_threaded = true,
         .target = target,
         .name = "main",
-        .link_libc = true,
-        .optimize = .ReleaseSmall,
+        .optimize = .ReleaseSafe,
     });
 
     const unit_tests = b.addTest(.{
