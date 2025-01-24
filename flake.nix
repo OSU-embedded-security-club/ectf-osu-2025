@@ -37,7 +37,7 @@
           buildInputs = with pkgs; [
             toolsPackage
             designPackage
-
+            typst
             zig
             go-task
             zls
