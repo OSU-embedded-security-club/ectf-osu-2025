@@ -6,6 +6,7 @@ const shared = @import("shared");
 
 const secrets = @import("secrets");
 
+const flash = @import("flash.zig");
 const uart = @import("uart.zig");
 
 pub const Magic = '%';
@@ -69,13 +70,6 @@ const ListChannelResponse = extern struct {
 };
 
 pub fn list(subscriptions: *[8]?Subscription) !void {
-    const pubkey = secrets.publicKey;
-    const sig = shared.bytes("471b74909a877d7f9066e84390692bf31ee5dea59940e32bd2812d22cd5743b0defa546f343b4d4fa5680d8104f219c952b6ea8b5d744f5e417d65522e2e8908");
-    const message = "John Hancock";
-
-    const good = ed25519.ed25519_verify(&sig, message, message.len, &pubkey);
-    debugMessage("Sigature verification = {}", .{good});
-
     var listChannelResponse = ListChannelResponse{ .num_channels = 0 };
 
     var channelIndex: usize = 0;
@@ -88,6 +82,11 @@ pub fn list(subscriptions: *[8]?Subscription) !void {
     listChannelResponse.num_channels = channelIndex;
 
     const body = listChannelResponse.asBytes();
+
+    const err = msdk.MXC_FLC_PageErase(@import("flash.zig").FLASH_START_ADDR);
+    debugMessage("err={}", .{err});
+    // try flash.saveSubscriptions(2, subscriptions);
+    // try shared.msdkTry(msdk.MXC_FLC_PageErase(flash.FLASH_START_ADDR));
 
     try sendMessageWithAcks('L', body);
 }
@@ -171,6 +170,8 @@ pub fn subscribe(body: []u8, subscriptions: *[8]?Subscription) !void {
         @memcpy(&sub.*.?.hashes[i], hash);
         i += 1;
     }
+
+    // try flash.saveSubscriptions(@truncate(header.channel - 1), subscriptions);
 
     try sendMessageWithAcks('S', &.{});
 }

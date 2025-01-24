@@ -4,13 +4,16 @@ const shared = @import("shared");
 const msdk = @import("msdk");
 const ed25519 = @import("ed25519");
 
+const flash = @import("flash.zig");
 const uart = @import("uart.zig");
 const messaging = @import("host_messaging.zig");
 
 /// High level entrypoint for the decoder
 pub fn run() !void {
-    try uart.init();
+    var subscriptions = [8]?messaging.Subscription{ null, null, null, null, null, null, null, null };
+    try flash.init(&subscriptions);
 
+    try uart.init();
     messaging.debugMessage("Initialized UART", .{});
 
     msdk.LED_Off(msdk.LED1);
@@ -18,11 +21,11 @@ pub fn run() !void {
 
     msdk.LED_On(msdk.LED2);
 
-    var subscriptions = [8]?messaging.Subscription{ null, null, null, null, null, null, null, null };
-
     var n: usize = 0;
     while (true) : (n += 1) {
-        process(&subscriptions) catch continue;
+        process(&subscriptions) catch |err| {
+            messaging.debugMessage("caught err: {}", .{err});
+        };
     }
 }
 
