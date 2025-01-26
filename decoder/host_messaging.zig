@@ -82,13 +82,42 @@ pub fn list(subscriptions: *[8]?Subscription) !void {
     listChannelResponse.num_channels = channelIndex;
 
     const body = listChannelResponse.asBytes();
+    _ = body; // autofix
 
-    const err = msdk.MXC_FLC_PageErase(@import("flash.zig").FLASH_START_ADDR);
-    debugMessage("err={}", .{err});
-    // try flash.saveSubscriptions(2, subscriptions);
-    // try shared.msdkTry(msdk.MXC_FLC_PageErase(flash.FLASH_START_ADDR));
+    subscriptions[6] = Subscription{
+        .start = 6,
+        .end = 2,
+        .num_hashes = 0,
+    };
+    try flash.saveSubscriptions(6, subscriptions);
 
-    try sendMessageWithAcks('L', body);
+    // const err = msdk.MXC_FLC_PageErase(@import("flash.zig").FLASH_START_ADDR);
+    // debugMessage("ERASE ERROR={}", .{err});
+
+    // var magic: i32 = 0;
+    // msdk.MXC_FLC_Read(flash.FLASH_START_ADDR, &magic, 4);
+    // debugMessage("FLC_READ --> {}", .{magic});
+
+    // // try flash.saveSubscriptions(2, subscriptions);
+    // const ret = msdk.MXC_FLC_PageErase(flash.FLASH_START_ADDR);
+    // debugMessage("ret --> {}", .{ret});
+
+    // msdk.MXC_FLC_Read(flash.FLASH_START_ADDR, &magic, 4);
+    // debugMessage("FLC_READ SECOND --> {}", .{magic});
+
+    // const ret2 = msdk.MXC_FLC_PageErase(flash.FLASH_START_ADDR);
+    // debugMessage("ret2 --> {}", .{ret2});
+
+    // msdk.MXC_FLC_Read(flash.FLASH_START_ADDR, &magic, 4);
+    // debugMessage("FLC_READ SECOND --> {}", .{magic});
+
+    // const ret3 = msdk.MXC_FLC_Write32(flash.FLASH_START_ADDR, 0xcafebabe);
+    // debugMessage("ret3 --> {}", .{ret3});
+
+    // msdk.MXC_FLC_Read(flash.FLASH_START_ADDR, &magic, 4);
+    // debugMessage("FLC_READ THIRD --> {}", .{magic});
+
+    // try sendMessageWithAcks('L', body);
 }
 
 const Decode = extern struct {

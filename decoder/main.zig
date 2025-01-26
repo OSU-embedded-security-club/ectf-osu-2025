@@ -10,11 +10,11 @@ const messaging = @import("host_messaging.zig");
 
 /// High level entrypoint for the decoder
 pub fn run() !void {
-    var subscriptions = [8]?messaging.Subscription{ null, null, null, null, null, null, null, null };
-    try flash.init(&subscriptions);
-
     try uart.init();
     messaging.debugMessage("Initialized UART", .{});
+
+    var subscriptions = [8]?messaging.Subscription{ null, null, null, null, null, null, null, null };
+    try flash.init(&subscriptions);
 
     msdk.LED_Off(msdk.LED1);
     msdk.LED_Off(msdk.LED3);

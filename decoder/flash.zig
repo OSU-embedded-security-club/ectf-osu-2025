@@ -30,7 +30,10 @@ pub fn init(subscriptions: *[8]?messaging.Subscription) !void {
     msdk.MXC_FLC_Read(FLASH_START_ADDR, &meta, @sizeOf(@TypeOf(meta)));
 
     if (meta.first_boot != FIRST_BOOT_MAGIC) {
+        messaging.debugMessage("First boot!", .{});
         meta = .{};
+
+        meta.valid[3] = true;
 
         try shared.msdkTry(msdk.MXC_FLC_PageErase(FLASH_START_ADDR));
         try write(FLASH_START_ADDR, std.mem.asBytes(&meta));
@@ -39,7 +42,14 @@ pub fn init(subscriptions: *[8]?messaging.Subscription) !void {
 
     for (meta.valid, 1..) |valid, i| {
         if (valid) {
-            msdk.MXC_FLC_Read(@intCast(FLASH_START_ADDR + (i * msdk.MXC_FLASH_PAGE_SIZE)), &subscriptions[i - 1], @sizeOf(@TypeOf(subscriptions[i - 1])));
+            messaging.debugMessage("Reading saved subscription {}", .{i});
+            const subscription = messaging.Subscription{
+                .start = 1,
+                .end = 1,
+                .num_hashes = 0,
+            };
+            subscriptions[i - 1] = subscription;
+            // msdk.MXC_FLC_Read(@intCast(FLASH_START_ADDR + (i * msdk.MXC_FLASH_PAGE_SIZE)), &subscriptions[i - 1], @sizeOf(@TypeOf(subscriptions[i - 1])));
         }
     }
 }
@@ -56,16 +66,16 @@ pub fn saveSubscriptions(channelIndex: u3, subscriptions: *[8]?messaging.Subscri
     var meta = PageMeta{};
     for (subscriptions, 0..) |subscription, i| {
         if (subscription) |_| {
+            messaging.debugMessage("Should have {} = true", .{i});
             meta.valid[i] = true;
         }
     }
 
     messaging.debugMessage("saving channel={}", .{channelIndex});
 
-    const err = msdk.MXC_FLC_PageErase(FLASH_START_ADDR);
-    messaging.debugMessage("err={}", .{err});
+    try shared.msdkTry(msdk.MXC_FLC_PageErase(FLASH_START_ADDR));
     // try shared.msdkTry(msdk.MXC_FLC_PageErase(FLASH_START_ADDR));
-    // try write(FLASH_START_ADDR, std.mem.asBytes(&meta));
+    try write(FLASH_START_ADDR, std.mem.asBytes(&meta));
 
     // const offset = FLASH_START_ADDR + (channelIndex * msdk.MXC_FLASH_PAGE_SIZE);
     // try shared.msdkTry(msdk.MXC_FLC_PageErase(offset));
