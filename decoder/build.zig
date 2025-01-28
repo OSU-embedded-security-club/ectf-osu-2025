@@ -39,7 +39,6 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = b.path("msdk_includes.h"),
             .target = target,
             .optimize = .ReleaseSafe,
-            .link_libc = false,
         });
 
         const include_paths = [_][]const u8{
@@ -53,6 +52,7 @@ pub fn build(b: *std.Build) !void {
             "/Libraries/MiscDrivers/PMIC",
             "/Libraries/MiscDrivers/Touchscreen",
             "/Libraries/MiscDrivers/CODEC",
+            "/Libraries/MiscDrivers/SRAM",
             "/Libraries/PeriphDrivers/Include/MAX78000",
             "/Libraries/PeriphDrivers/Source/ADC",
             "/Libraries/PeriphDrivers/Source/AES",
@@ -86,6 +86,7 @@ pub fn build(b: *std.Build) !void {
         msdk.addIncludeDir(try std.fs.path.join(b.allocator, &[_][]const u8{ env.get("GCC_ARM_EMBDEDDED") orelse "/usr/lib", "arm-none-eabi/include" }));
 
         msdk.defineCMacroRaw("TARGET=MAX78000");
+        msdk.defineCMacroRaw("__COMPILER_BARRIER()");
         msdk.defineCMacroRaw("TARGET_REV=0x4131");
         msdk.defineCMacroRaw("LIB_BOARD");
         msdk.defineCMacroRaw("CAMERA_OV7692");

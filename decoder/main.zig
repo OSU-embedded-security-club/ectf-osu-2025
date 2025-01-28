@@ -4,32 +4,38 @@ const shared = @import("shared");
 const msdk = @import("msdk");
 const ed25519 = @import("ed25519");
 
+const flash = @import("flash.zig");
 const uart = @import("uart.zig");
 const messaging = @import("host_messaging.zig");
+
+pub var subscriptions = [8]?messaging.Subscription{ null, null, null, null, null, null, null, null };
+const MAXIMUM_MESSAGE_SIZE = @sizeOf(messaging.SubscribeHeader) + @sizeOf(messaging.Subscription);
+var message_body_buffer: [MAXIMUM_MESSAGE_SIZE]u8 = undefined;
 
 /// High level entrypoint for the decoder
 pub fn run() !void {
     try uart.init();
-
     messaging.debugMessage("Initialized UART", .{});
+
+    try flash.init();
 
     msdk.LED_Off(msdk.LED1);
     msdk.LED_Off(msdk.LED3);
 
     msdk.LED_On(msdk.LED2);
 
-    var subscriptions = [8]?messaging.Subscription{ null, null, null, null, null, null, null, null };
-
     var n: usize = 0;
     while (true) : (n += 1) {
-        process(&subscriptions) catch continue;
+        process() catch |err| {
+            messaging.debugMessage("caught err: {}", .{err});
+        };
     }
 }
 
-fn process(subscriptions: *[8]?messaging.Subscription) !void {
+fn process() !void {
     while (try uart.readByte() != messaging.Magic) {}
     const opcode = try uart.readByte();
-    const length: u16 = (try uart.readByte()) + (@as(u16, try uart.readByte()) << 8);
+    const length: u16 = @min(message_body_buffer.len, (try uart.readByte()) + (@as(u16, try uart.readByte()) << 8));
 
     messaging.debugMessage("opcode={c}, length={}", .{ opcode, length });
 
@@ -42,7 +48,7 @@ fn process(subscriptions: *[8]?messaging.Subscription) !void {
             }
 
             messaging.ack();
-            try messaging.list(subscriptions);
+            try messaging.list();
             return;
         },
         else => {
@@ -51,8 +57,7 @@ fn process(subscriptions: *[8]?messaging.Subscription) !void {
         },
     }
 
-    var rawBuffer: [std.math.maxInt(@TypeOf(length))]u8 = undefined;
-    var body = rawBuffer[0..length];
+    var body = message_body_buffer[0..length];
     var i: usize = 0;
     while (i < length) : (i += 256) {
         uart.readBytes(body[i..@min(i + 256, length)]);
@@ -60,8 +65,8 @@ fn process(subscriptions: *[8]?messaging.Subscription) !void {
     }
 
     switch (opcode) {
-        'D' => try messaging.decode(body, subscriptions),
-        'S' => try messaging.subscribe(body, subscriptions),
+        'D' => try messaging.decode(body),
+        'S' => try messaging.subscribe(body),
         else => unreachable,
     }
 }

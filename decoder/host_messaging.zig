@@ -6,7 +6,9 @@ const shared = @import("shared");
 
 const secrets = @import("secrets");
 
+const flash = @import("flash.zig");
 const uart = @import("uart.zig");
+const root = @import("root");
 
 pub const Magic = '%';
 
@@ -68,18 +70,11 @@ const ListChannelResponse = extern struct {
     }
 };
 
-pub fn list(subscriptions: *[8]?Subscription) !void {
-    const pubkey = secrets.publicKey;
-    const sig = shared.bytes("471b74909a877d7f9066e84390692bf31ee5dea59940e32bd2812d22cd5743b0defa546f343b4d4fa5680d8104f219c952b6ea8b5d744f5e417d65522e2e8908");
-    const message = "John Hancock";
-
-    const good = ed25519.ed25519_verify(&sig, message, message.len, &pubkey);
-    debugMessage("Sigature verification = {}", .{good});
-
+pub fn list() !void {
     var listChannelResponse = ListChannelResponse{ .num_channels = 0 };
 
     var channelIndex: usize = 0;
-    for (subscriptions, 0..) |subscription, i| {
+    for (root.subscriptions, 0..) |subscription, i| {
         if (subscription) |sub| {
             listChannelResponse.subscriptions[channelIndex] = SubscriptionEntry{ .channel_id = i + 1, .start = sub.start, .end = sub.end };
             channelIndex += 1;
@@ -99,7 +94,7 @@ const Decode = extern struct {
     signature: [64]u8 align(1),
 };
 
-pub fn decode(body: []u8, subscriptions: *[8]?Subscription) !void {
+pub fn decode(body: []u8) !void {
     if (body.len != @sizeOf(Decode)) {
         debugMessage("BAD LENGTH FOR DECODE: {}", .{body.len});
         return error.BadLength;
@@ -115,11 +110,11 @@ pub fn decode(body: []u8, subscriptions: *[8]?Subscription) !void {
     }
 
     if (dec.channel != 0) {
-        if (dec.channel - 1 >= subscriptions.len) {
+        if (dec.channel - 1 >= root.subscriptions.len) {
             debugMessage("Channel too large", .{});
             return error.ChannelTooLarge;
         }
-        const subscription: Subscription = subscriptions[dec.channel - 1] orelse {
+        const subscription: Subscription = root.subscriptions[dec.channel - 1] orelse {
             debugMessage("No subscription", .{});
             return error.NoSubscription;
         };
@@ -139,30 +134,28 @@ pub fn decode(body: []u8, subscriptions: *[8]?Subscription) !void {
     try sendMessageWithAcks('D', &dec.message);
 }
 
-const SubscribeHeader = extern struct {
+pub const SubscribeHeader = extern struct {
     start: u64 align(1),
     end: u64 align(1),
     channel: u8 align(1),
 };
 
-pub const Subscription = struct {
+pub const Subscription = extern struct {
     start: u64,
     end: u64,
-    num_hashes: u7,
     hashes: [126][16]u8 = undefined,
 };
 
-pub fn subscribe(body: []u8, subscriptions: *[8]?Subscription) !void {
+pub fn subscribe(body: []u8) !void {
     const key = secrets.subscriptionKey;
     std.crypto.stream.salsa.Salsa20.xor(body, body, 0, key, std.mem.zeroes([8]u8));
 
     const header: *const SubscribeHeader = @ptrCast(body.ptr);
-    const sub = &subscriptions[header.channel - 1];
+    const sub = &root.subscriptions[header.channel - 1];
 
     sub.* = .{
         .start = header.start,
         .end = header.end,
-        .num_hashes = @truncate((body.len - @sizeOf(SubscribeHeader)) / 16),
     };
 
     var iter = std.mem.window(u8, body[@sizeOf(SubscribeHeader)..], 16, 16);
@@ -171,6 +164,8 @@ pub fn subscribe(body: []u8, subscriptions: *[8]?Subscription) !void {
         @memcpy(&sub.*.?.hashes[i], hash);
         i += 1;
     }
+
+    try flash.saveSubscriptions(@truncate(header.channel - 1));
 
     try sendMessageWithAcks('S', &.{});
 }
