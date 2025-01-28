@@ -24,39 +24,40 @@
   }
 }
 
+#set table(stroke: (_, y) => if y == 0 { (bottom: 1pt) })
+
 #align(center, text(size: 18pt, [OSU Satellite TV for MITRE eCTF 2025]))
 
 #outline(indent: 1em)
 
 = Team
 
-The team is comprised of the following undergraduate students from the Ohio State State University:
+The team is comprised of the following people from the Ohio State State University:
 
-- Jack Leverett
-- Divij Sasidhar
-- Mark Bundschuh
-- Maxwell McGee
-- Matthew Weikel
-- Debjani Hill
-- Aditya Gupta
-- Jacob Mcquade
-- Eva Smith
-- William Comer
-- Diego Noria
-- Zihao Zhang
-- Mason Erwine
-- Christopher Begines
-- Haoling Zhou
-- Ryan Jackman
-- Joshua Sims
-- Rachel Thoi
-- Cadan Keller
-- James Vendetti
-
-Along with advisors:
-
-- Felix Engelmann
-- Julia Armstrong
+#table(
+  columns: (1fr, 1fr),
+  table.header([*Student*], [*Advisor*]),
+  [Jack Leverett], [Dr. Felix Engelmann],
+  [Divij Sasidhar], [Julia Armstrong],
+  [Mark Bundschuh], [],
+  [Maxwell McGee], [],
+  [Matthew Weikel], [],
+  [Debjani Hill], [],
+  [Aditya Gupta], [],
+  [Jacob Mcquade], [],
+  [Eva Smith], [],
+  [William Comer], [],
+  [Diego Noria], [],
+  [Zihao Zhang], [],
+  [Mason Erwine], [],
+  [Christopher Begines], [],
+  [Haoling Zhou], [],
+  [Ryan Jackman], [],
+  [Joshua Sims], [],
+  [Rachel Thoi], [],
+  [Cadan Keller], [],
+  [James Vendetti], [],
+)
 
 = Introduction
 
@@ -139,10 +140,17 @@ The firmware must be built for each separate decoder device. When building, spec
 
 == Encode and Decode
 
-- u8 channel ID
-- u64 timestamp
-- [64]u8 message
-- [64]u8 signature
+#let bytesize(bytes) = rect(width: 4pt * bytes, height: 5pt, fill: navy)
+
+#align(center, table(
+  columns: 3,
+  align: left,
+  table.header([Field Name], [Size], [Relative Size]),
+  [Channel ID], [1 byte], bytesize(1),
+  [Timestamp], [8 bytes], bytesize(8),
+  [Message], [64 bytes], bytesize(64),
+  [Signature], [64 bytes], bytesize(64),
+))
 
 Each frame has an integer timestamp $t in [0, 2^64 - 1]$. Each timestamp has a unique symmetric key $k_t$ which the encoder will use to encrypt the message, and the decoder will use to decrypt the message, both using Salsa20. The keys are derived with a _binary hash key derivation tree_. Let $H$ be a cryptographic hash function. We have chosen $H="blake3"$. Let $L$ and $R$ be salted hash functions $L(x)=H(x + \""left"\")$ and $R(x)=H(x+\""right"\")$. The encoder uses secret $S_"channel_id"$ for the channel id currently being broadcasted, and generates a root hash $h=H(S)$. Then, two hashes $h_0=L(h)$ and $h_1=L(h)$ are derived. Then $h_00=L(h_0)$, $h_01=R(h_0)$, $h_10=L(h_1)$, and $h_11=R(h_1)$, and so on. This process continues to form a tree of height $64$. The leaves of the tree form the keys $k_t$, one for every timestamp. @hash-key-derivation-tree shows a hash key derivation tree for $t in [0, 7]$ and has $8$ leaves. Note that the full sized tree has $2^64$ leaves, the leaves are computed on demand for particular timestamps since it would be computationally infeasible to precompute all keys for such a large tree.
 
@@ -198,10 +206,15 @@ To send the keys to the decoder, they are compressed into a subscription file. T
 
 == Subscription
 
-- u8 channel ID
-- u64 start timestamp
-- u64 end timestamp
-- [up to 126][16]u8 packed subtree root hashes
+#align(center, table(
+  columns: 3,
+  align: left,
+  table.header([Field Name], [Size], [Relative Size]),
+  [Channel ID], [1 byte], bytesize(1),
+  [Start Timestamp], [8 bytes], bytesize(8),
+  [End Timestamp], [8 bytes], bytesize(8),
+  [Packed Subtree Root Hashes], ${n in NN, 16n "bytes" | 1 <= n <= 126 }$, box(box(bytesize(16)) + " " + box($...n "times"$)),
+))
 
 The decoder runs the same algorithm using the start and end timestamps as the encoder to figure out where the subtree root hashes are, so no extra metadata is required to positions the hashes, or to know how many there are.
 
