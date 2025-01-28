@@ -9,12 +9,12 @@ fn irq() callconv(.C) void {
 
     if (temp & msdk.MXC_F_FLC_INTR_DONE != 0) {
         msdk.MXC_FLC0.*.intr &= ~msdk.MXC_F_FLC_INTR_DONE;
-        // messaging.debugMessage(" -> Interrupt! (Flash access done)", .{});
+        messaging.debugMessage(" -> Interrupt! (Flash access done)", .{});
     }
 
     if (temp & msdk.MXC_F_FLC_INTR_AF != 0) {
         msdk.MXC_FLC0.*.intr &= ~msdk.MXC_F_FLC_INTR_AF;
-        // messaging.debugMessage(" -> Interrupt! (Flash access failure)", .{});
+        messaging.debugMessage(" -> Interrupt! (Flash access failure)", .{});
     }
 }
 
@@ -23,7 +23,6 @@ pub fn init() !void {
     @fence(std.builtin.AtomicOrder.seq_cst);
     msdk.NVIC_EnableIRQ(msdk.FLC0_IRQn);
     @fence(std.builtin.AtomicOrder.seq_cst);
-    asm volatile ("cpsie i" ::: "memory");
     try shared.msdkTry(msdk.MXC_FLC_EnableInt(msdk.MXC_F_FLC_INTR_DONEIE | msdk.MXC_F_FLC_INTR_AFIE));
     msdk.MXC_ICC_Disable(msdk.MXC_ICC0);
 
