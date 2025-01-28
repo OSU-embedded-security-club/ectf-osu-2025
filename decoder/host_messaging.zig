@@ -134,7 +134,7 @@ pub fn decode(body: []u8) !void {
     try sendMessageWithAcks('D', &dec.message);
 }
 
-const SubscribeHeader = extern struct {
+pub const SubscribeHeader = extern struct {
     start: u64 align(1),
     end: u64 align(1),
     channel: u8 align(1),

@@ -84,10 +84,6 @@ const PageMeta = extern struct {
     valid: [8]bool = std.mem.zeroes([8]bool),
 };
 
-const FIRST_BOOT_MAGIC: u64 = 0xba345908903256;
+const FIRST_BOOT_MAGIC: u64 = 0xdeadbeefcafebabe;
 
 pub const FLASH_START_ADDR = msdk.MXC_FLASH_MEM_BASE + msdk.MXC_FLASH_MEM_SIZE - (10 * msdk.MXC_FLASH_PAGE_SIZE);
-
-test "size" {
-    try std.testing.expectEqual(2040, @sizeOf(messaging.Subscription));
-}

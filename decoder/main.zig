@@ -9,7 +9,8 @@ const uart = @import("uart.zig");
 const messaging = @import("host_messaging.zig");
 
 pub var subscriptions = [8]?messaging.Subscription{ null, null, null, null, null, null, null, null };
-var message_body_buffer = std.mem.zeroes([2034]u8);
+const MAXIMUM_MESSAGE_SIZE = @sizeOf(messaging.SubscribeHeader) + @sizeOf(messaging.Subscription);
+var message_body_buffer: [MAXIMUM_MESSAGE_SIZE]u8 = undefined;
 
 /// High level entrypoint for the decoder
 pub fn run() !void {
