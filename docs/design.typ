@@ -213,7 +213,7 @@ To send the keys to the decoder, they are compressed into a subscription file. T
   [Channel ID], [1 byte], bytesize(1),
   [Start Timestamp], [8 bytes], bytesize(8),
   [End Timestamp], [8 bytes], bytesize(8),
-  [Packed Subtree Root Hashes], ${n in NN, 16n "bytes" | 1 <= n <= 126 }$, box(box(bytesize(16)) + " " + box($...n "times"$)),
+  [Packed Subtree Root Hashes], ${16n "bytes" | n in NN, 1 <= n <= 126 }$, box(box(bytesize(16)) + " " + box($...n "times"$)),
 ))
 
 The decoder runs the same algorithm using the start and end timestamps as the encoder to figure out where the subtree root hashes are, so no extra metadata is required to positions the hashes, or to know how many there are.
@@ -238,3 +238,104 @@ A global timestamp is kept in the RAM of the decoder, and is used to reject miso
 == Zig
 
 The #link("https://ziglang.org", [Zig programming language]) was selected as the language to write the secure decoder in. Zig has memory safety features like protection from indexing an array out of bounds, double free protections and more. Additionally, it includes a comprehensive standard library which securely implements many cryptographic functions, among many other quality of life functions. Most importantly, Zig can do all this while maintaining perfect C compatibility and using the MSDK provided by Analog Devices Inc (the developer of the MAX78000FTHR), without requiring a rewrite of the Hardware Abstraction Layer (HAL). This allowed the team to move incredibly quickly while ensuring a high level of security.
+
+= Appendix
+
+== Proof that there are no more than 126 nodes
+
+=== Definitions
+
+For a given $n$, a _node_ has an offset $o$ where $o in NN$ and $0 <= o <= 2^n - 1$, and a length $l in {2^x | x in NN and 0 <= x <= n}$.
+
+To say that an interval $I$ can be _encoded by_ $n$ nodes is to say that, $union.big_i^n [o_i, o_i + l_i - 1]=I$.
+
+Two intervals, $I_1=[o_1, o_1 + l_1 - 1]$, and $I_2 = [o_2, o_2 + l_2 - 1]$ are _analogous_ if $l_1=l_2$ and $o_1 mod l_1 = o_2 mod l_2$.
+
+=== Lemma 1 <lemma1>
+
+Any interval on $[0, 2^n-1]$ where $n in NN, n >= 1$ and starting at $0$ can be encoded with at most $n$ nodes.
+
+Base Case, $n=1$:
+
+Let $I$ be an interval on $[0, 2^1 - 1] = [0,1]$ starting at $0$. For $I=[0, 0]$, this can be covered by a $1$ length node at offset 0. For $I=[0, 1]$, this can be covered by a $2$ length node at offset 0.
+
+Induction Hypothesis: Any interval on $[0, 2^n - 1]$ and starting at $0$ can be encoded with at most $n$ nodes.
+
+We wish to show that any interval on $[0, 2^(n+1)-1]$ and starting at $0$ can be encoded with at most $n+1$ nodes.
+
+Let $I$ be an interval in $[0, 2^(n+1)-1]$ starting at $0$, i.e. $I=[0, k]$ where $k<2^(n+1)$.
+
+Case 1: $k < 2^n$: By the induction hypothesis, $I$ can be covered by $n<=n+1$ nodes.
+
+Case 2: $k >= 2^n$: Then $I = [0, 2^n - 1] union [2^n, k]$. The interval $[0, 2^n - 1]$ can be covered by $1$ node, because it is half of the total interval. $[2^n, k]$ is analogous to $[0, 2^n - 1]$. By the induction hypothesis, $[0, 2^n - 1]$ can be covered by at most $n$ nodes. Therefore, $[2^n, k]$ can be covered by at most $n$ nodes. Therefore, $I$ can be covered by at most $n+1$ nodes.
+
+=== Lemma 2 <lemma2>
+
+Any interval on $[k, 2^n-1]$ where $n in NN, n >= 1$ and starting at $k$ can be encoded with at most $n$ nodes.
+
+This follows from Lemma 1, because the interval $[k, 2^n-1]$ is analogous to $[0, 2^n - 1]$.
+
+=== Theorem <theorem>
+
+Any interval on $[0, 2^n - 1]$ where $n in NN, n >= 2$ can be covered by at most $2n-2$ nodes.
+
+Base Case, $n=2$:
+
+Let $I$ be an interval on $[0, 2^2-1]=[0,3]$.
+
+Induction Hypothesis: Any interval on $[0, 2^n - 1]$ where $n in NN, n >= 2$ can be covered by at most $2n-2$ nodes.
+
+We wish to show that any interval on $[0, 2^(n+1)-1]$ where $n in NN, n+1 >= 2 => n>=1$ can be covered by at most $2(n+1)-1=2n$ nodes.
+
+Let $I$ be an interval on $[0, 2^(n+1) -1]$.
+
+Case 1: $I subset [0, 2^n - 1]$. Intuitively, this is within the left half of the interval. By the induction hypothesis, $I$ can be covered by $2n-2 <= 2n$ nodes.
+
+Case 2: $I subset [2^n, 2^(n+1)-1]$. Intuitively, this is within the right half of the interval. The interval $[2^n, 2^(n+1)-1]$ is analogous to the interval $[0, 2^n - 1]$. By the induction hypothesis, $[0, 2^n - 1]$ can be covered by $2n-2$ nodes. Therefore, $I$ can be covered by $2n-2 <= 2n$ nodes.
+
+Case 3: $k < 2^n < l$. Intuitively, this means the interval crosses the middle boundary. Then, $I=[k, 2^n - 1] union [2^n, l]$. By @lemma2[Lemma 2:], $[k, 2^n - 1]$ can be covered by at most $n$ nodes. Similarly, $[2^n, l]$ is analogous to $[0, l-2^n]$, which, by @lemma1[Lemma 1:], can be covered by at most $n$ nodes. Therefore, $I$ can be covered by $n+n=2n$ nodes.
+
+=== Application
+
+Timestamps are $64$ bit unsigned integers, so we choose $n=64$. @theorem[Theorem] shows that no more than $2(64)-2=126$ nodes are required to encode any interval from $[0, 2^64-1]$.
+
+== Proof of node partitioning optimality
+
+We will show that the following algorithm correctly produces the optimal set of nodes to cover an interval $[a, b]$.
+
+#let style-number(number) = text(gray)[#number]
+#show raw.where(block: true): it => grid(
+  columns: 2,
+  align: (right, left),
+  gutter: 0.5em,
+  ..it.lines
+    .enumerate()
+    .map(((i, line)) => (style-number(i + 1), line))
+    .flatten()
+)
+
+```py
+class Node:
+    offset: int
+    length: int
+
+def get_nodes(a: int, b: int) -> list[Node]:
+    nodes = []
+
+    while a <= b:
+        power = 1
+        while (a + (1 << power) - 1) <= b and power <= ctz(a):
+            power += 1
+        power -= 1
+
+        end = a + (1 << power) - 1
+        nodes.append(Node(length=2**power, offset=a))
+
+        a = end + 1
+
+    return nodes
+```
+
+=== Correctness
+
+=== Optimality
