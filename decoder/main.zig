@@ -8,12 +8,14 @@ const flash = @import("flash.zig");
 const uart = @import("uart.zig");
 const messaging = @import("host_messaging.zig");
 
+var subscriptions = [8]?messaging.Subscription{ null, null, null, null, null, null, null, null };
+var message_body_buffer = std.mem.zeroes([2034]u8);
+
 /// High level entrypoint for the decoder
 pub fn run() !void {
     try uart.init();
     messaging.debugMessage("Initialized UART", .{});
 
-    var subscriptions = [8]?messaging.Subscription{ null, null, null, null, null, null, null, null };
     try flash.init(&subscriptions);
 
     msdk.LED_Off(msdk.LED1);
@@ -23,16 +25,16 @@ pub fn run() !void {
 
     var n: usize = 0;
     while (true) : (n += 1) {
-        process(&subscriptions) catch |err| {
+        process() catch |err| {
             messaging.debugMessage("caught err: {}", .{err});
         };
     }
 }
 
-fn process(subscriptions: *[8]?messaging.Subscription) !void {
+fn process() !void {
     while (try uart.readByte() != messaging.Magic) {}
     const opcode = try uart.readByte();
-    const length: u16 = (try uart.readByte()) + (@as(u16, try uart.readByte()) << 8);
+    const length: u16 = @min(message_body_buffer.len, (try uart.readByte()) + (@as(u16, try uart.readByte()) << 8));
 
     messaging.debugMessage("opcode={c}, length={}", .{ opcode, length });
 
@@ -45,7 +47,7 @@ fn process(subscriptions: *[8]?messaging.Subscription) !void {
             }
 
             messaging.ack();
-            try messaging.list(subscriptions);
+            try messaging.list(&subscriptions);
             return;
         },
         else => {
@@ -54,8 +56,7 @@ fn process(subscriptions: *[8]?messaging.Subscription) !void {
         },
     }
 
-    var rawBuffer: [std.math.maxInt(@TypeOf(length))]u8 = undefined;
-    var body = rawBuffer[0..length];
+    var body = message_body_buffer[0..length];
     var i: usize = 0;
     while (i < length) : (i += 256) {
         uart.readBytes(body[i..@min(i + 256, length)]);
@@ -63,8 +64,8 @@ fn process(subscriptions: *[8]?messaging.Subscription) !void {
     }
 
     switch (opcode) {
-        'D' => try messaging.decode(body, subscriptions),
-        'S' => try messaging.subscribe(body, subscriptions),
+        'D' => try messaging.decode(body, &subscriptions),
+        'S' => try messaging.subscribe(body, &subscriptions),
         else => unreachable,
     }
 }

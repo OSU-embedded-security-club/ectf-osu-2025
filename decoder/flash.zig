@@ -43,13 +43,12 @@ pub fn init(subscriptions: *[8]?messaging.Subscription) !void {
     for (meta.valid, 1..) |valid, i| {
         if (valid) {
             messaging.debugMessage("Reading saved subscription {}", .{i});
-            const subscription = messaging.Subscription{
-                .start = 1,
-                .end = 1,
+            subscriptions[i - 1] = messaging.Subscription{
+                .start = 0,
+                .end = 0,
                 .num_hashes = 0,
             };
-            subscriptions[i - 1] = subscription;
-            // msdk.MXC_FLC_Read(@intCast(FLASH_START_ADDR + (i * msdk.MXC_FLASH_PAGE_SIZE)), &subscriptions[i - 1], @sizeOf(@TypeOf(subscriptions[i - 1])));
+            msdk.MXC_FLC_Read(@intCast(FLASH_START_ADDR + (i * msdk.MXC_FLASH_PAGE_SIZE)), &subscriptions[i - 1].?, @sizeOf(@TypeOf(subscriptions[i - 1].?)));
         }
     }
 }
@@ -66,7 +65,6 @@ pub fn saveSubscriptions(channelIndex: u3, subscriptions: *[8]?messaging.Subscri
     var meta = PageMeta{};
     for (subscriptions, 0..) |subscription, i| {
         if (subscription) |_| {
-            messaging.debugMessage("Should have {} = true", .{i});
             meta.valid[i] = true;
         }
     }
@@ -74,12 +72,11 @@ pub fn saveSubscriptions(channelIndex: u3, subscriptions: *[8]?messaging.Subscri
     messaging.debugMessage("saving channel={}", .{channelIndex});
 
     try shared.msdkTry(msdk.MXC_FLC_PageErase(FLASH_START_ADDR));
-    // try shared.msdkTry(msdk.MXC_FLC_PageErase(FLASH_START_ADDR));
     try write(FLASH_START_ADDR, std.mem.asBytes(&meta));
 
-    // const offset = FLASH_START_ADDR + (channelIndex * msdk.MXC_FLASH_PAGE_SIZE);
-    // try shared.msdkTry(msdk.MXC_FLC_PageErase(offset));
-    // try write(offset, std.mem.asBytes(&subscriptions[channelIndex]));
+    const addr = FLASH_START_ADDR + msdk.MXC_FLASH_PAGE_SIZE * (@as(usize, channelIndex) + 1);
+    try shared.msdkTry(msdk.MXC_FLC_PageErase(addr));
+    try write(addr, std.mem.asBytes(&subscriptions[channelIndex].?));
 }
 
 const PageMeta = extern struct {
@@ -90,8 +87,6 @@ const PageMeta = extern struct {
 const FIRST_BOOT_MAGIC: u64 = 0xba345908903256;
 
 pub const FLASH_START_ADDR = msdk.MXC_FLASH_MEM_BASE + msdk.MXC_FLASH_MEM_SIZE - (10 * msdk.MXC_FLASH_PAGE_SIZE);
-// pub const FLASH_START_ADDR = msdk.MXC_FLASH_PAGE_ADDR(msdk.MXC_FLASH_MEM_SIZE / msdk.MXC_FLASH_PAGE_SIZE - 9);
-// pub const FLASH_START_ADDR = msdk.MXC_FLASH_PAGE_ADDR(0);
 
 test "size" {
     try std.testing.expectEqual(2040, @sizeOf(messaging.Subscription));
