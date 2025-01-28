@@ -9,6 +9,11 @@ tasks:
     cmds:
       - '[ "$(stat -c %a /dev/ttyACM*)" != "777" ] && sudo chmod 777 /dev/ttyACM* || true'
 
+  docs:
+    desc: Watch documentation design file and compile to PDF
+    cmds:
+      - typst watch docs/design.typ
+
   1-gen-secrets:
     desc: Generate secrets
     vars:
