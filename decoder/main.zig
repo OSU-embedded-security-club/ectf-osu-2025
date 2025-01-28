@@ -8,7 +8,7 @@ const flash = @import("flash.zig");
 const uart = @import("uart.zig");
 const messaging = @import("host_messaging.zig");
 
-var subscriptions = [8]?messaging.Subscription{ null, null, null, null, null, null, null, null };
+pub var subscriptions = [8]?messaging.Subscription{ null, null, null, null, null, null, null, null };
 var message_body_buffer = std.mem.zeroes([2034]u8);
 
 /// High level entrypoint for the decoder
@@ -16,7 +16,7 @@ pub fn run() !void {
     try uart.init();
     messaging.debugMessage("Initialized UART", .{});
 
-    try flash.init(&subscriptions);
+    try flash.init();
 
     msdk.LED_Off(msdk.LED1);
     msdk.LED_Off(msdk.LED3);
@@ -47,7 +47,7 @@ fn process() !void {
             }
 
             messaging.ack();
-            try messaging.list(&subscriptions);
+            try messaging.list();
             return;
         },
         else => {
@@ -64,8 +64,8 @@ fn process() !void {
     }
 
     switch (opcode) {
-        'D' => try messaging.decode(body, &subscriptions),
-        'S' => try messaging.subscribe(body, &subscriptions),
+        'D' => try messaging.decode(body),
+        'S' => try messaging.subscribe(body),
         else => unreachable,
     }
 }

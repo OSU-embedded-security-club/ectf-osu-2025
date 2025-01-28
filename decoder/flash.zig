@@ -2,6 +2,7 @@ const std = @import("std");
 const msdk = @import("msdk");
 const messaging = @import("host_messaging.zig");
 const shared = @import("shared");
+const root = @import("root");
 
 fn irq() callconv(.C) void {
     const temp = msdk.MXC_FLC0.*.intr;
@@ -17,7 +18,7 @@ fn irq() callconv(.C) void {
     }
 }
 
-pub fn init(subscriptions: *[8]?messaging.Subscription) !void {
+pub fn init() !void {
     msdk.MXC_NVIC_SetVector(msdk.FLC0_IRQn, irq);
     @fence(std.builtin.AtomicOrder.seq_cst);
     msdk.NVIC_EnableIRQ(msdk.FLC0_IRQn);
@@ -43,12 +44,12 @@ pub fn init(subscriptions: *[8]?messaging.Subscription) !void {
     for (meta.valid, 1..) |valid, i| {
         if (valid) {
             messaging.debugMessage("Reading saved subscription {}", .{i});
-            subscriptions[i - 1] = messaging.Subscription{
+            root.subscriptions[i - 1] = messaging.Subscription{
                 .start = 0,
                 .end = 0,
                 .num_hashes = 0,
             };
-            msdk.MXC_FLC_Read(@intCast(FLASH_START_ADDR + (i * msdk.MXC_FLASH_PAGE_SIZE)), &subscriptions[i - 1].?, @sizeOf(@TypeOf(subscriptions[i - 1].?)));
+            msdk.MXC_FLC_Read(@intCast(FLASH_START_ADDR + (i * msdk.MXC_FLASH_PAGE_SIZE)), &root.subscriptions[i - 1].?, @sizeOf(@TypeOf(root.subscriptions[i - 1].?)));
         }
     }
 }
@@ -61,9 +62,9 @@ fn write(address: usize, buffer: []u8) !void {
     try shared.msdkTry(msdk.MXC_FLC_Write(address, buffer.len, @ptrCast(@alignCast(buffer.ptr))));
 }
 
-pub fn saveSubscriptions(channelIndex: u3, subscriptions: *[8]?messaging.Subscription) !void {
+pub fn saveSubscriptions(channelIndex: u3) !void {
     var meta = PageMeta{};
-    for (subscriptions, 0..) |subscription, i| {
+    for (root.subscriptions, 0..) |subscription, i| {
         if (subscription) |_| {
             meta.valid[i] = true;
         }
@@ -76,7 +77,7 @@ pub fn saveSubscriptions(channelIndex: u3, subscriptions: *[8]?messaging.Subscri
 
     const addr = FLASH_START_ADDR + msdk.MXC_FLASH_PAGE_SIZE * (@as(usize, channelIndex) + 1);
     try shared.msdkTry(msdk.MXC_FLC_PageErase(addr));
-    try write(addr, std.mem.asBytes(&subscriptions[channelIndex].?));
+    try write(addr, std.mem.asBytes(&root.subscriptions[channelIndex].?));
 }
 
 const PageMeta = extern struct {
