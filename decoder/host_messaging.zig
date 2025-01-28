@@ -143,7 +143,6 @@ pub const SubscribeHeader = extern struct {
 pub const Subscription = extern struct {
     start: u64,
     end: u64,
-    num_hashes: u8,
     hashes: [126][16]u8 = undefined,
 };
 
@@ -157,7 +156,6 @@ pub fn subscribe(body: []u8) !void {
     sub.* = .{
         .start = header.start,
         .end = header.end,
-        .num_hashes = @truncate((body.len - @sizeOf(SubscribeHeader)) / 16),
     };
 
     var iter = std.mem.window(u8, body[@sizeOf(SubscribeHeader)..], 16, 16);

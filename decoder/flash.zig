@@ -33,8 +33,6 @@ pub fn init() !void {
         messaging.debugMessage("First boot!", .{});
         meta = .{};
 
-        meta.valid[3] = true;
-
         try shared.msdkTry(msdk.MXC_FLC_PageErase(FLASH_START_ADDR));
         try write(FLASH_START_ADDR, std.mem.asBytes(&meta));
         return;
@@ -46,7 +44,6 @@ pub fn init() !void {
             root.subscriptions[i - 1] = messaging.Subscription{
                 .start = 0,
                 .end = 0,
-                .num_hashes = 0,
             };
             msdk.MXC_FLC_Read(@intCast(FLASH_START_ADDR + (i * msdk.MXC_FLASH_PAGE_SIZE)), &root.subscriptions[i - 1].?, @sizeOf(@TypeOf(root.subscriptions[i - 1].?)));
         }
