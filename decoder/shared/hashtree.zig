@@ -197,17 +197,3 @@ test "getKey most suboptimal" {
     crypto.decrypt(&frameData, key);
     try std.testing.expectEqualStrings("Bonjour le monde------------------------------------------------", &frameData);
 }
-
-// pub fn encode(secret: [16]u8, timestamp: u64, frame: [64]u8) void {
-//     _ = secret; // autofix
-//     _ = timestamp; // autofix
-//     _ = frame; // autofix
-// }
-
-// pub fn decode(start: u64, end: u64, root_hashes: []const [16]u8, timestamp: u64, frame: [64]u8) void {
-//     _ = start; // autofix
-//     _ = end; // autofix
-//     _ = root_hashes; // autofix
-//     _ = timestamp; // autofix
-//     _ = frame; // autofix
-// }

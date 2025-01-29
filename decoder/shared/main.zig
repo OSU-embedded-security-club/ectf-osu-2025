@@ -3,37 +3,6 @@ const std = @import("std");
 pub const hashtree = @import("hashtree.zig");
 pub const crypto = @import("crypto.zig");
 
-/// An allocated value and its `deinit` function
-pub fn Owned(comptime T: type) type {
-    return struct {
-        const Self = @This();
-
-        inner: T,
-        allocator: std.mem.Allocator,
-
-        pub fn deinit(self: Self) void {
-            switch (@typeInfo(T)) {
-                .Array => self.allocator.free(self.inner),
-                .Vector => self.allocator.free(self.inner),
-                .Pointer => |info| switch (info.size) {
-                    .One => self.allocator.destroy(self.inner),
-                    .Many, .C, .Slice => self.allocator.free(self.inner),
-                },
-                .Struct => self.inner.deinit(),
-                else => unreachable,
-            }
-        }
-    };
-}
-
-/// `inner` must have been allocated with `allocator`
-pub fn toOwned(inner: anytype, allocator: std.mem.Allocator) Owned(@TypeOf(inner)) {
-    return .{
-        .inner = inner,
-        .allocator = allocator,
-    };
-}
-
 /// See https://github.com/analogdevicesinc/msdk/blob/4f0d3d320b29c455153ea16dc34a08d87ddd85a8/Libraries/PeriphDrivers/Include/MAX78000/mxc_errors.h
 const MXCError = enum(c_int) {
     E_NO_ERROR = 0,
@@ -98,10 +67,6 @@ pub fn msdkTry(err: c_int) MSDKError!void {
         MXCError.E_NOT_SUPPORTED => return error.NOT_SUPPORTED,
         MXCError.E_FAIL => return error.FAIL,
     }
-}
-
-test "sugma tests" {
-    std.debug.print("sugma testing\n", .{});
 }
 
 pub fn bytes(comptime hex: []const u8) [hex.len / 2]u8 {

@@ -82,7 +82,7 @@ def ctz(x: int) -> int:
 
 def get_roots(a: int, b: int) -> list[Root]:
     if a > b:
-        raise ValueError("no")
+        raise ValueError("Invalid range: a > b")
 
     ranges = []
 
