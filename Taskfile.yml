@@ -1,13 +1,17 @@
 version: '3'
 
+vars:
+  PORT:
+    sh: ls /dev/ttyACM* /dev/ttyUSB* /dev/tty.usb* 2>/dev/null | head -n1
+
 tasks:
   require-decoder:
     internal: true
     preconditions:
-      - sh: ls /dev/ttyACM*
+      - sh: ls "{{.PORT}}"
         msg: Decoder device not connected (physically connect the MAX78000 to your computer over USB and run the command again)
     cmds:
-      - '[ "$(stat -c %a /dev/ttyACM*)" != "777" ] && sudo chmod 777 /dev/ttyACM* || true'
+      - '[ "$(stat -c %a {{.PORT}})" != "777" ] && sudo chmod 777 {{.PORT}} || true'
 
   docs:
     desc: Watch documentation design file and compile to PDF
@@ -36,7 +40,7 @@ tasks:
     deps:
       - task: require-decoder
     cmds:
-      - python -m ectf25.utils.flash ./build_out/max78000.bin /dev/ttyACM*
+      - python -m ectf25.utils.flash ./build_out/max78000.bin {{.PORT}}
 
   4-gen-subscription:
     desc: Generate a subscription
@@ -59,14 +63,14 @@ tasks:
       - sh: ls {{.FILE}}
         msg: Subscription '{{.FILE}}' does not exist
     cmds:
-      - python -m ectf25.tv.subscribe {{.FILE}} /dev/ttyACM*
+      - python -m ectf25.tv.subscribe {{.FILE}} {{.PORT}}
 
   6-list:
     desc: Asks the Decoder to list the subscriptions that it currently has
     deps:
       - task: require-decoder
     cmds:
-      - python -m ectf25.tv.list /dev/ttyACM*
+      - python -m ectf25.tv.list {{.PORT}}
 
   7-uplink:
     desc: Encodes sample frames with the custom encoder function and sends them to the satellite
@@ -91,7 +95,7 @@ tasks:
     deps:
       - task: require-decoder
     cmds:
-      - python -m ectf25.tv.run localhost 2001 /dev/ttyACM*
+      - python -m ectf25.tv.run localhost 2001 {{.PORT}}
 
   10-end-to-end:
     desc: Run a complete end to end test
@@ -116,14 +120,14 @@ tasks:
     deps:
       - task: require-decoder
     cmds:
-      - python benches/decoder.py /dev/ttyACM*
+      - python benches/decoder.py {{.PORT}}
 
   bench-subscription:
     desc: Benchmark creating a subscription on the decoder
     deps:
       - task: require-decoder
     cmds:
-      - python benches/subscription.py /dev/ttyACM*
+      - python benches/subscription.py {{.PORT}}
 
   stress-encoder:
     desc: Use MITRE's stress test to benchmark the encoder
@@ -154,4 +158,4 @@ tasks:
           CHANNEL: 3
       - task: 5-subscribe
       - task: 6-list
-      - python -m ectf25.utils.stress_test -t 6400 decode /dev/ttyACM* frames/custom.json
+      - python -m ectf25.utils.stress_test -t 6400 decode {{.PORT}} frames/custom.json
