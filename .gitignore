@@ -6,3 +6,4 @@ __pycache__/
 *.img
 /decoder/docs/
 *.egg-info/
+frames/custom.json

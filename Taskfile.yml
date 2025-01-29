@@ -43,7 +43,7 @@ tasks:
     vars:
       FILE: '{{.FILE | default "subscription.bin"}}'
       DEVICE_ID: '{{.DEVICE_ID | default "0xDEADBEEF"}}'
-      START: '{{.START | default "32"}}'
+      START: '{{.START | default "0"}}'
       END: '{{.END | default "128"}}'
       CHANNEL: '{{.CHANNEL | default "1"}}'
     cmds:
@@ -105,3 +105,53 @@ tasks:
     cmds:
       - docker build -t decoder .
       - docker run --rm -v ./build_out:/out -v ./:/decoder -v ./../secrets:/secrets -e DECODER_ID={{.DECODER_ID}} -it --entrypoint /bin/bash decoder
+
+  bench-encoder:
+    desc: Benchmark the encoder
+    cmds:
+      - python benches/encoder.py
+
+  bench-decoder:
+    desc: Benchmark the decoder
+    deps:
+      - task: require-decoder
+    cmds:
+      - python benches/decoder.py /dev/ttyACM*
+
+  bench-subscription:
+    desc: Benchmark creating a subscription on the decoder
+    deps:
+      - task: require-decoder
+    cmds:
+      - python benches/subscription.py /dev/ttyACM*
+
+  stress-encoder:
+    desc: Use MITRE's stress test to benchmark the encoder
+    generates:
+      - frames/custom.json
+    cmds:
+      - python -m ectf25.utils.stress_test -t 6400 encode secrets/secrets.json --dump frames/custom.json
+
+  stress-decoder:
+    desc: Use MITRE's stress test to benchmark the decoder
+    deps:
+      - task: require-decoder
+      - task: stress-encoder
+    cmds:
+      - task: 4-gen-subscription
+        vars:
+          END: 18446744073709551615
+          CHANNEL: 1
+      - task: 5-subscribe
+      - task: 4-gen-subscription
+        vars:
+          END: 18446744073709551615
+          CHANNEL: 2
+      - task: 5-subscribe
+      - task: 4-gen-subscription
+        vars:
+          END: 18446744073709551615
+          CHANNEL: 3
+      - task: 5-subscribe
+      - task: 6-list
+      - python -m ectf25.utils.stress_test -t 6400 decode /dev/ttyACM* frames/custom.json

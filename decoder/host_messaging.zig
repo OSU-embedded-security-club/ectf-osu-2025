@@ -100,7 +100,6 @@ pub fn decode(body: []u8) !void {
         return error.BadLength;
     }
     const dec: *Decode = @ptrCast(body.ptr);
-    debugMessage("CHANNEL {any} TIMESTAMP {any} MESSAGE {} SIGNATURE {}", .{ dec.channel, dec.timestamp, std.fmt.fmtSliceHexLower(&dec.message), std.fmt.fmtSliceHexLower(&dec.signature) });
 
     const message = body[0..@offsetOf(Decode, "signature")];
     const good = ed25519.ed25519_verify(&dec.signature, message.ptr, message.len, &secrets.publicKey);
@@ -118,7 +117,6 @@ pub fn decode(body: []u8) !void {
             debugMessage("No subscription", .{});
             return error.NoSubscription;
         };
-        debugMessage("SUBSCRIPTION START {} END {}", .{ subscription.start, subscription.end });
         if (dec.timestamp < subscription.start or subscription.end < dec.timestamp) {
             debugMessage("Not in subscription time range", .{});
             return error.NotInSubscriptionTimeRange;

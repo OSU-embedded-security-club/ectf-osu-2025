@@ -37,7 +37,7 @@ fn process() !void {
     const opcode = try uart.readByte();
     const length: u16 = @min(message_body_buffer.len, (try uart.readByte()) + (@as(u16, try uart.readByte()) << 8));
 
-    messaging.debugMessage("opcode={c}, length={}", .{ opcode, length });
+    // messaging.debugMessage("opcode={c}, length={}", .{ opcode, length });
 
     switch (opcode) {
         'D', 'S' => messaging.ack(),

@@ -66,8 +66,6 @@ pub fn saveSubscriptions(channelIndex: u3) !void {
         }
     }
 
-    messaging.debugMessage("saving channel={}", .{channelIndex});
-
     try shared.msdkTry(msdk.MXC_FLC_PageErase(FLASH_START_ADDR));
     try write(FLASH_START_ADDR, std.mem.asBytes(&meta));
 
