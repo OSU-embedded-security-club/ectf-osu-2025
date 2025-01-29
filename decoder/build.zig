@@ -17,7 +17,7 @@ pub fn build(b: *std.Build) !void {
         .single_threaded = true,
         .target = target,
         .name = "main",
-        .optimize = .ReleaseSafe,
+        .optimize = .ReleaseSmall,
     });
 
     const unit_tests = b.addTest(.{
@@ -149,6 +149,8 @@ pub fn build(b: *std.Build) !void {
     decoderStep.dependOn(&b.addInstallFile(lib_dir_step.getLibPath().path(b, "zig.h"), "../c/src/zig.h").step);
 
     decoderStep.dependOn(&b.addInstallArtifact(decoderExe, .{ .dest_dir = .{ .override = .{ .custom = "../c/src" } } }).step);
+
+    decoderExe.root_module.addAnonymousImport("mulXi3", .{ .root_source_file = lib_dir_step.getLibPath().path(b, "compiler_rt/mulXi3.zig") });
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
     test_step.dependOn(&run_unit_tests.step);

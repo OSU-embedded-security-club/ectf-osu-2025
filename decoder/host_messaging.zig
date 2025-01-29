@@ -2,6 +2,10 @@ const std = @import("std");
 const msdk = @import("msdk");
 const ed25519 = @import("ed25519");
 
+comptime {
+    _ = @import("mulXi3");
+}
+
 const shared = @import("shared");
 
 const secrets = @import("secrets");
@@ -102,11 +106,14 @@ pub fn decode(body: []u8) !void {
     const dec: *Decode = @ptrCast(body.ptr);
 
     const message = body[0..@offsetOf(Decode, "signature")];
-    const good = ed25519.ed25519_verify(&dec.signature, message.ptr, message.len, &secrets.publicKey);
-    if (good == 0) {
-        debugMessage("Invalid signature", .{});
-        return error.InvalidSignature;
-    }
+    // const good = ed25519.ed25519_verify(&dec.signature, message.ptr, message.len, &secrets.publicKey);
+    // if (good == 0) {
+    //     debugMessage("Invalid signature", .{});
+    //     return error.InvalidSignature;
+    // }
+    const publicKey = try std.crypto.sign.Ed25519.PublicKey.fromBytes(secrets.publicKey);
+    const signature = std.crypto.sign.Ed25519.Signature.fromBytes(dec.signature);
+    try signature.verify(message, publicKey);
 
     if (dec.channel != 0) {
         if (dec.channel - 1 >= root.subscriptions.len) {
