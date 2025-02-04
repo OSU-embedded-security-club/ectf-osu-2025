@@ -41,11 +41,9 @@ pub fn init() !void {
     for (meta.valid, 1..) |valid, i| {
         if (valid) {
             messaging.debugMessage("Reading saved subscription {}", .{i});
-            root.subscriptions[i - 1] = messaging.Subscription{
-                .start = 0,
-                .end = 0,
-            };
-            msdk.MXC_FLC_Read(@intCast(FLASH_START_ADDR + (i * msdk.MXC_FLASH_PAGE_SIZE)), &root.subscriptions[i - 1].?, @sizeOf(@TypeOf(root.subscriptions[i - 1].?)));
+            var subscriptionBytes: shared.hashtree.Subscription.Bytes = undefined;
+            read(FLASH_START_ADDR + (i * msdk.MXC_FLASH_PAGE_SIZE), &subscriptionBytes);
+            root.subscriptions[i - 1] = shared.hashtree.Subscription.init(subscriptionBytes.start, subscriptionBytes.end, std.mem.asBytes(&subscriptionBytes.root_hashes));
         }
     }
 }

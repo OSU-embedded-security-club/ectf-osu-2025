@@ -76,7 +76,7 @@ pub fn list() !void {
     var channelIndex: usize = 0;
     for (root.subscriptions, 0..) |subscription, i| {
         if (subscription) |sub| {
-            listChannelResponse.subscriptions[channelIndex] = SubscriptionEntry{ .channel_id = i + 1, .start = sub.start, .end = sub.end };
+            listChannelResponse.subscriptions[channelIndex] = SubscriptionEntry{ .channel_id = i + 1, .start = sub.serialized.start, .end = sub.serialized.end };
             channelIndex += 1;
         }
     }
@@ -113,19 +113,16 @@ pub fn decode(body: []u8) !void {
             debugMessage("Channel too large", .{});
             return error.ChannelTooLarge;
         }
-        const subscription: Subscription = root.subscriptions[dec.channel - 1] orelse {
+        var subscription = &(root.subscriptions[dec.channel - 1] orelse {
             debugMessage("No subscription", .{});
             return error.NoSubscription;
-        };
-        if (dec.timestamp < subscription.start or subscription.end < dec.timestamp) {
+        });
+        if (dec.timestamp < subscription.serialized.start or subscription.serialized.end < dec.timestamp) {
             debugMessage("Not in subscription time range", .{});
             return error.NotInSubscriptionTimeRange;
         }
-        var roots: [126]shared.hashtree.RootPosition = undefined;
-        _ = shared.hashtree.getRootPositions(subscription.start, subscription.end, &roots);
-        var key: [16]u8 = undefined;
-        shared.hashtree.getKey(&roots, &subscription.hashes, dec.timestamp, &key);
 
+        const key = subscription.getKey(dec.timestamp);
         shared.crypto.decrypt(&dec.message, key);
     }
 
@@ -138,32 +135,16 @@ pub const SubscribeHeader = extern struct {
     channel: u8 align(1),
 };
 
-pub const Subscription = extern struct {
-    start: u64,
-    end: u64,
-    hashes: [126][16]u8 = undefined,
-};
-
 pub fn subscribe(body: []u8) !void {
     const key = secrets.subscriptionKey;
     std.crypto.stream.salsa.Salsa20.xor(body, body, 0, key, std.mem.zeroes([8]u8));
 
     const header: *const SubscribeHeader = @ptrCast(body.ptr);
-    const sub = &root.subscriptions[header.channel - 1];
+    const channelIndex = header.channel - 1;
 
-    sub.* = .{
-        .start = header.start,
-        .end = header.end,
-    };
+    root.subscriptions[channelIndex] = shared.hashtree.Subscription.init(header.start, header.end, body[@sizeOf(SubscribeHeader)..]);
 
-    var iter = std.mem.window(u8, body[@sizeOf(SubscribeHeader)..], 16, 16);
-    var i: usize = 0;
-    while (iter.next()) |hash| {
-        @memcpy(&sub.*.?.hashes[i], hash);
-        i += 1;
-    }
-
-    try flash.saveSubscriptions(@truncate(header.channel - 1));
+    try flash.saveSubscriptions(@truncate(channelIndex));
 
     try sendMessageWithAcks('S', &.{});
 }
@@ -173,7 +154,7 @@ pub fn ack() void {
     uart.writeBytes(&packet.asBytes());
 }
 
-var debugMessageBuffer: [65536]u8 = undefined;
+var debugMessageBuffer: [256]u8 = undefined;
 
 pub fn debugMessage(comptime format: []const u8, args: anytype) void {
     const text = std.fmt.bufPrint(debugMessageBuffer[4..], format, args) catch unreachable;

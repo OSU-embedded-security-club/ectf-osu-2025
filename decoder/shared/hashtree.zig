@@ -1,5 +1,4 @@
 const std = @import("std");
-const bytes = @import("shared").bytes;
 
 const crypto = @import("crypto.zig");
 
@@ -7,117 +6,117 @@ const HASH_TREE_HEIGHT = 64;
 const LEFT_SALT = 'L';
 const RIGHT_SALT = 'R';
 
-pub fn getRootPositions(a: u64, b: u64, roots: *[126]RootPosition) usize {
-    if (a > b) {
-        @panic("Invalid range: a > b");
+pub const Subscription = struct {
+    pub const Bytes = extern struct {
+        start: u64,
+        end: u64,
+        root_hashes: [126][16]u8 = undefined,
+    };
+
+    serialized: Bytes,
+    roots: [126]RootPosition = undefined,
+    cached_hashes: [65][16]u8 = undefined,
+    root_index: isize = -1,
+    last_timestamp: u64 = 0,
+
+    pub inline fn asBytes(self: *Subscription) []u8 {
+        return std.mem.asBytes(&self.serialized);
     }
 
-    if (a == 0 and b == std.math.maxInt(u64)) {
-        roots[0] = RootPosition{ .offset = 0, .power = 64 };
-        return 1;
+    pub fn init(start: u64, end: u64, root_hash_bytes: []const u8) Subscription {
+        if (start > end) {
+            @panic("Invalid range: a > b");
+        }
+
+        var self: Subscription = .{
+            .serialized = .{ .start = start, .end = end },
+        };
+
+        var iter = std.mem.window(u8, root_hash_bytes, 16, 16);
+        var i: usize = 0;
+        while (iter.next()) |hash| {
+            @memcpy(&self.serialized.root_hashes[i], hash);
+            i += 1;
+        }
+
+        self.calculateRootPositions();
+
+        return self;
     }
 
-    var index: usize = 0;
-    var start = a;
+    fn calculateRootPositions(self: *Subscription) void {
+        if (self.serialized.start == 0 and self.serialized.end == std.math.maxInt(u64)) {
+            self.roots[0] = RootPosition{ .offset = 0, .power = 64 };
+            return;
+        }
 
-    while (start <= b) {
-        var power: u6 = 0;
-        while (power + 1 <= @ctz(start) and (@as(u64, 1) << (power + 1)) <= b - start + 1) power += 1;
+        var index: usize = 0;
+        var start = self.serialized.start;
 
-        roots[index] = RootPosition{ .offset = start, .power = power };
-        index += 1;
+        while (start <= self.serialized.end) {
+            var power: u6 = 0;
+            while (power + 1 <= @ctz(start) and (@as(u64, 1) << (power + 1)) <= self.serialized.end - start + 1) power += 1;
 
-        const end = start + (@as(u64, 1) << power) - 1;
-        start = end + 1;
-    }
+            self.roots[index] = RootPosition{ .offset = start, .power = power };
+            index += 1;
 
-    return index;
-}
-
-pub fn getKey(roots: []RootPosition, rootHashes: []const [16]u8, timestamp: u64, outKey: *[16]u8) void {
-    if (roots.len != rootHashes.len) {
-        @panic("roots and rootHashes must be the same length");
-    }
-
-    var rootIndex: usize = 0;
-    for (roots, 0..) |root, i| {
-        if (root.power == 64 or (timestamp >= root.offset and timestamp < root.offset + (@as(u64, 1) << @truncate(root.power)))) {
-            rootIndex = i;
-            break;
+            const end = start + (@as(u64, 1) << power) - 1;
+            start = end + 1;
         }
     }
 
-    const root = roots[rootIndex];
-    var buf: [17]u8 = undefined;
-    @memcpy(buf[0..16], &rootHashes[rootIndex]);
+    pub fn getKey(self: *Subscription, timestamp: u64) [16]u8 {
+        if (timestamp > self.serialized.end) @panic("Timestamp past end of subscription");
+        if (timestamp < self.last_timestamp) @panic("Decreasing timestamp");
 
-    var i = root.power;
-    while (i > 0) : (i -= 1) {
-        buf[16] = if (timestamp & (@as(u64, 1) << @truncate(i - 1)) == 0) LEFT_SALT else RIGHT_SALT;
-        std.crypto.hash.Blake3.hash(&buf, buf[0..16], .{});
+        // Calculate the number of lower bits changed
+        var hash_index = 64 - @clz(self.last_timestamp ^ timestamp);
+        self.last_timestamp = timestamp;
+
+        const root_index: usize = @intCast(self.root_index + 1);
+        for (self.roots[root_index..], root_index..) |root, i| {
+            if (root.includes(timestamp)) {
+                self.root_index = @intCast(i);
+                hash_index = root.power;
+                @memcpy(&self.cached_hashes[root.power], &self.serialized.root_hashes[i]);
+                break;
+            }
+        }
+
+        var i = hash_index;
+        while (i > 0) : (i -= 1) {
+            var hasher = std.crypto.hash.Blake3.init(.{});
+            hasher.update(&self.cached_hashes[i]);
+            hasher.update(&[_]u8{if (timestamp & (@as(u64, 1) << @truncate(i - 1)) == 0) LEFT_SALT else RIGHT_SALT});
+            hasher.final(&self.cached_hashes[i - 1]);
+        }
+        return self.cached_hashes[0];
     }
-    @memcpy(outKey, buf[0..16]);
-}
+};
 
 pub const RootPosition = struct {
     offset: u64,
     power: u7,
+
+    inline fn start(self: RootPosition) u64 {
+        return self.offset;
+    }
+
+    inline fn end(self: RootPosition) u64 {
+        if (self.power == 64) return std.math.maxInt(u64);
+        return self.offset + (@as(u64, 1) << @truncate(self.power)) - 1;
+    }
+
+    inline fn includes(self: RootPosition, timestamp: u64) bool {
+        return timestamp >= self.start() and timestamp <= self.end();
+    }
 };
 
 test "ctz" {
     try std.testing.expectEqual(64, @ctz(@as(u64, 0)));
 }
 
-test "getRootPositions" {
-    var roots: [126]RootPosition = undefined;
-
-    {
-        const numRoots = getRootPositions(5, 13, &roots);
-        const rs = roots[0..numRoots];
-        try std.testing.expectEqualDeep(&[_]RootPosition{
-            .{ .offset = 5, .power = 0 },
-            .{ .offset = 6, .power = 1 },
-            .{ .offset = 8, .power = 2 },
-            .{ .offset = 12, .power = 1 },
-        }, rs);
-        try std.testing.expectEqual(4, rs.len);
-    }
-
-    {
-        const numRoots = getRootPositions(0, 1023, &roots);
-        const rs = roots[0..numRoots];
-        try std.testing.expectEqualDeep(&[_]RootPosition{
-            .{ .offset = 0, .power = 10 },
-        }, rs);
-        try std.testing.expectEqual(1, rs.len);
-    }
-
-    {
-        const numRoots = getRootPositions(1, (1 << 64) - 2, &roots);
-        const rs = roots[0..numRoots];
-        try std.testing.expectEqual(126, rs.len);
-    }
-
-    {
-        const numRoots = getRootPositions(0, (1 << 64) - 1, &roots);
-        const rs = roots[0..numRoots];
-        try std.testing.expectEqual(1, rs.len);
-    }
-}
-
-test "getKey example" {
-    var roots: [126]RootPosition = undefined;
-
-    const numRoots = getRootPositions(1, 6, &roots);
-    const rs = roots[0..numRoots];
-    try std.testing.expectEqualDeep(&[_]RootPosition{
-        .{ .offset = 1, .power = 0 },
-        .{ .offset = 2, .power = 1 },
-        .{ .offset = 4, .power = 1 },
-        .{ .offset = 6, .power = 0 },
-    }, rs);
-    try std.testing.expectEqual(4, rs.len);
-
+test "getKey" {
     const rootHashes: []const [16]u8 = &[_][16]u8{
         .{ 171, 101, 175, 230, 138, 33, 142, 169, 75, 189, 158, 179, 34, 186, 218, 3 },
         .{ 40, 11, 189, 239, 152, 148, 157, 195, 126, 141, 227, 76, 145, 86, 166, 241 },
@@ -125,54 +124,58 @@ test "getKey example" {
         .{ 147, 254, 134, 61, 116, 97, 34, 122, 101, 149, 153, 111, 55, 78, 71, 232 },
     };
 
-    var key: [16]u8 = undefined;
-    getKey(rs, rootHashes, 2, &key);
-    try std.testing.expectEqual(bytes("1ecf7fc4dd1bda2a593fb7f7d0959b1f"), key);
+    var subscription = Subscription.init(1, 6, std.mem.sliceAsBytes(rootHashes));
+    try std.testing.expectEqualDeep(&[_]RootPosition{
+        .{ .offset = 1, .power = 0 },
+        .{ .offset = 2, .power = 1 },
+        .{ .offset = 4, .power = 1 },
+        .{ .offset = 6, .power = 0 },
+    }, subscription.roots[0..4]);
 
-    var frameData = bytes("b669a858d2f9c5d3b2c5a85ca98c46bc3557740a9260ce921523a352fdc71c5779a741c2de4b3fe94ecb8cbf15804e609acf2be1056da0c1cb5dfa8bdbb99486");
-    crypto.decrypt(&frameData, key);
-    try std.testing.expectEqualStrings("Hello world!----------------------------------------------------", &frameData);
+    {
+        const key = subscription.getKey(2);
+        try std.testing.expectEqual(bytes("1ecf7fc4dd1bda2a593fb7f7d0959b1f"), key);
+
+        var frameData = bytes("b669a858d2f9c5d3b2c5a85ca98c46bc3557740a9260ce921523a352fdc71c5779a741c2de4b3fe94ecb8cbf15804e609acf2be1056da0c1cb5dfa8bdbb99486");
+        crypto.decrypt(&frameData, key);
+        try std.testing.expectEqualStrings("Hello world!----------------------------------------------------", &frameData);
+    }
+
+    try std.testing.expectEqual(bytes("96aa268a5e4708dc843dc4e21314ef45"), subscription.getKey(3));
+    try std.testing.expectEqual(bytes("b494fb2651d4beba877f96fa6f6049ee"), subscription.getKey(4));
 }
 
 test "getKey largest range" {
-    var roots: [126]RootPosition = undefined;
-
-    const numRoots = getRootPositions(0, (1 << 64) - 1, &roots);
-    const rs = roots[0..numRoots];
-    try std.testing.expectEqualDeep(&[_]RootPosition{
-        .{ .offset = 0, .power = 64 },
-    }, rs);
-    try std.testing.expectEqual(1, rs.len);
-
     const rootHashes: []const [16]u8 = &[_][16]u8{
         .{ 82, 135, 43, 160, 152, 200, 145, 46, 38, 149, 220, 27, 181, 94, 206, 127 },
     };
 
-    var key: [16]u8 = undefined;
-    getKey(rs, rootHashes, 0xdeadbeefcafebabe, &key);
-    try std.testing.expectEqual(bytes("50433b2d0ab5d7859c88c646f2379ffd"), key);
+    var subscription = Subscription.init(0, std.math.maxInt(u64), std.mem.sliceAsBytes(rootHashes));
+    try std.testing.expectEqualDeep(&[_]RootPosition{
+        .{ .offset = 0, .power = 64 },
+    }, subscription.roots[0..1]);
+
+    try std.testing.expectEqual(bytes("f5e67ba16ef73c2abfba04ec9c69f6cb"), subscription.getKey(0));
+    try std.testing.expectEqual(bytes("ab65afe68a218ea94bbd9eb322bada03"), subscription.getKey(1));
+    try std.testing.expectEqual(bytes("7b85341af0919ca152ea5ccb8119997d"), subscription.getKey(150));
+    try std.testing.expectEqual(bytes("50433b2d0ab5d7859c88c646f2379ffd"), subscription.getKey(0xdeadbeefcafebabe));
 
     var frameData = bytes("dc2128afcbec2c89326d84ce6374b02e0e863031e9618361824648b209c8c44caff4d68f0654ec7e1de087ccfdbd20814a62beae2b6d899104b926b06bc03dae");
-    crypto.decrypt(&frameData, key);
+    crypto.decrypt(&frameData, subscription.getKey(0xdeadbeefcafebabe));
     try std.testing.expectEqualStrings("Hola Mundo------------------------------------------------------", &frameData);
 }
 
 test "getKey single value range" {
-    var roots: [126]RootPosition = undefined;
-
-    const numRoots = getRootPositions(4, 4, &roots);
-    const rs = roots[0..numRoots];
-    try std.testing.expectEqualDeep(&[_]RootPosition{
-        .{ .offset = 4, .power = 0 },
-    }, rs);
-    try std.testing.expectEqual(1, rs.len);
-
     const rootHashes: []const [16]u8 = &[_][16]u8{
         .{ 180, 148, 251, 38, 81, 212, 190, 186, 135, 127, 150, 250, 111, 96, 73, 238 },
     };
 
-    var key: [16]u8 = undefined;
-    getKey(rs, rootHashes, 4, &key);
+    var subscription = Subscription.init(4, 4, std.mem.sliceAsBytes(rootHashes));
+    try std.testing.expectEqualDeep(&[_]RootPosition{
+        .{ .offset = 4, .power = 0 },
+    }, subscription.roots[0..1]);
+
+    const key = subscription.getKey(4);
     try std.testing.expectEqual(bytes("b494fb2651d4beba877f96fa6f6049ee"), key);
 
     var frameData = bytes("87c544979d7df0237bb5e0791e08e1288cb6bf3090cba085d1c9a37f265fadbcb613587ed4c6e09f49b8d96a0a18c1d5d3c96ebc9c18377b9f59e769e3a6c4f8");
@@ -181,19 +184,20 @@ test "getKey single value range" {
 }
 
 test "getKey most suboptimal" {
-    var roots: [126]RootPosition = undefined;
-
-    const numRoots = getRootPositions(1, (1 << 64) - 2, &roots);
-    const rs = roots[0..numRoots];
-    try std.testing.expectEqual(126, rs.len);
-
     const rootHashes: []const [16]u8 = &[_][16]u8{ .{ 171, 101, 175, 230, 138, 33, 142, 169, 75, 189, 158, 179, 34, 186, 218, 3 }, .{ 40, 11, 189, 239, 152, 148, 157, 195, 126, 141, 227, 76, 145, 86, 166, 241 }, .{ 5, 177, 195, 245, 213, 145, 29, 122, 70, 200, 246, 81, 248, 167, 147, 64 }, .{ 135, 0, 34, 57, 233, 90, 196, 89, 130, 172, 80, 109, 57, 101, 140, 41 }, .{ 27, 126, 213, 90, 191, 60, 76, 161, 2, 201, 226, 113, 175, 32, 84, 77 }, .{ 40, 147, 106, 248, 12, 82, 253, 129, 162, 154, 146, 44, 215, 4, 113, 29 }, .{ 68, 193, 76, 43, 215, 241, 35, 214, 60, 251, 96, 33, 144, 131, 150, 173 }, .{ 1, 128, 199, 64, 208, 78, 41, 108, 239, 208, 135, 162, 89, 117, 100, 161 }, .{ 158, 220, 205, 237, 83, 48, 90, 81, 13, 202, 190, 132, 158, 215, 147, 151 }, .{ 152, 99, 85, 222, 38, 225, 68, 166, 19, 118, 97, 158, 255, 140, 143, 243 }, .{ 218, 137, 203, 226, 139, 74, 72, 54, 1, 228, 215, 100, 8, 106, 199, 157 }, .{ 201, 130, 175, 201, 183, 116, 151, 110, 145, 91, 105, 47, 99, 210, 178, 35 }, .{ 227, 37, 43, 36, 182, 122, 101, 160, 5, 232, 38, 186, 197, 120, 49, 30 }, .{ 12, 0, 98, 177, 205, 237, 153, 88, 74, 22, 122, 35, 169, 18, 234, 33 }, .{ 16, 2, 184, 212, 185, 139, 131, 10, 76, 176, 95, 193, 95, 164, 96, 0 }, .{ 239, 160, 157, 130, 230, 140, 221, 208, 220, 26, 175, 57, 245, 248, 164, 10 }, .{ 37, 255, 103, 247, 118, 85, 169, 149, 142, 55, 224, 172, 86, 2, 152, 244 }, .{ 158, 3, 32, 215, 196, 212, 8, 226, 70, 252, 189, 162, 62, 201, 21, 250 }, .{ 125, 60, 122, 94, 62, 89, 69, 190, 125, 239, 15, 157, 221, 213, 179, 39 }, .{ 95, 77, 36, 115, 241, 83, 217, 187, 172, 65, 17, 78, 3, 146, 47, 90 }, .{ 79, 95, 110, 117, 169, 101, 225, 12, 123, 91, 39, 142, 255, 211, 55, 191 }, .{ 56, 251, 114, 15, 236, 4, 96, 247, 144, 45, 20, 33, 73, 94, 106, 40 }, .{ 155, 18, 159, 5, 31, 116, 125, 43, 220, 197, 248, 236, 97, 14, 152, 68 }, .{ 93, 22, 11, 0, 72, 238, 74, 109, 231, 199, 210, 85, 183, 128, 55, 79 }, .{ 34, 252, 212, 10, 31, 109, 219, 217, 109, 253, 21, 178, 189, 255, 60, 221 }, .{ 211, 191, 239, 17, 113, 225, 168, 254, 37, 51, 19, 56, 79, 128, 112, 71 }, .{ 99, 56, 13, 231, 205, 208, 182, 175, 83, 58, 184, 71, 154, 134, 139, 253 }, .{ 191, 215, 211, 125, 207, 240, 24, 158, 28, 155, 167, 236, 251, 253, 151, 1 }, .{ 155, 40, 116, 191, 209, 198, 38, 153, 35, 17, 130, 208, 215, 124, 216, 80 }, .{ 213, 160, 226, 88, 180, 107, 170, 183, 126, 254, 232, 26, 134, 77, 231, 136 }, .{ 159, 34, 18, 138, 29, 195, 20, 78, 185, 72, 183, 25, 222, 216, 1, 137 }, .{ 55, 46, 21, 127, 217, 152, 127, 118, 90, 105, 247, 120, 162, 126, 161, 98 }, .{ 77, 45, 148, 76, 48, 34, 87, 80, 5, 249, 226, 97, 96, 126, 20, 125 }, .{ 22, 120, 157, 172, 208, 54, 120, 135, 132, 245, 168, 143, 30, 25, 57, 163 }, .{ 226, 58, 158, 15, 47, 92, 248, 143, 39, 243, 80, 149, 93, 186, 130, 25 }, .{ 243, 43, 111, 5, 207, 185, 204, 174, 24, 52, 253, 57, 209, 196, 98, 22 }, .{ 254, 145, 153, 51, 110, 57, 49, 25, 212, 4, 50, 59, 204, 119, 112, 76 }, .{ 27, 220, 114, 73, 165, 56, 134, 143, 210, 221, 94, 253, 55, 77, 66, 121 }, .{ 116, 233, 232, 166, 8, 172, 31, 207, 153, 40, 78, 215, 46, 96, 64, 177 }, .{ 72, 134, 39, 43, 151, 231, 243, 233, 218, 85, 62, 150, 158, 248, 96, 243 }, .{ 205, 130, 40, 111, 14, 106, 106, 231, 40, 94, 38, 216, 122, 229, 46, 218 }, .{ 48, 197, 93, 118, 246, 100, 120, 64, 96, 150, 162, 214, 42, 240, 192, 107 }, .{ 248, 216, 174, 118, 229, 87, 100, 230, 117, 43, 239, 185, 2, 168, 156, 106 }, .{ 138, 102, 125, 199, 42, 91, 174, 47, 131, 24, 185, 106, 97, 66, 222, 189 }, .{ 30, 203, 51, 151, 255, 121, 228, 128, 2, 43, 176, 22, 78, 35, 17, 130 }, .{ 207, 113, 129, 69, 203, 147, 109, 188, 244, 83, 251, 33, 133, 242, 220, 69 }, .{ 232, 119, 192, 236, 253, 230, 9, 195, 123, 39, 135, 205, 77, 85, 222, 131 }, .{ 229, 199, 41, 20, 101, 157, 154, 116, 180, 119, 76, 135, 112, 192, 214, 168 }, .{ 216, 165, 171, 165, 44, 209, 170, 17, 239, 60, 104, 40, 240, 109, 104, 78 }, .{ 196, 92, 150, 190, 129, 232, 224, 167, 3, 166, 122, 241, 19, 155, 238, 163 }, .{ 166, 108, 135, 90, 125, 108, 34, 231, 17, 201, 178, 126, 148, 18, 147, 37 }, .{ 60, 137, 194, 191, 131, 91, 46, 8, 85, 57, 139, 43, 190, 71, 125, 11 }, .{ 191, 80, 210, 78, 196, 154, 87, 164, 59, 19, 111, 150, 222, 62, 249, 114 }, .{ 56, 137, 158, 238, 197, 142, 38, 225, 196, 120, 238, 199, 123, 239, 48, 228 }, .{ 177, 111, 132, 150, 102, 107, 5, 98, 119, 35, 61, 60, 138, 142, 144, 130 }, .{ 166, 18, 232, 50, 169, 92, 63, 113, 193, 174, 98, 183, 34, 202, 248, 122 }, .{ 73, 22, 52, 241, 149, 202, 125, 85, 119, 228, 31, 58, 52, 130, 220, 236 }, .{ 85, 20, 148, 17, 178, 16, 143, 31, 149, 116, 154, 95, 113, 75, 106, 23 }, .{ 203, 205, 9, 153, 124, 90, 214, 253, 36, 220, 146, 177, 213, 38, 7, 221 }, .{ 195, 71, 190, 185, 130, 0, 53, 29, 109, 15, 98, 209, 125, 32, 187, 244 }, .{ 91, 216, 193, 234, 41, 81, 96, 44, 174, 65, 6, 18, 89, 122, 23, 23 }, .{ 234, 194, 223, 213, 205, 242, 74, 123, 33, 174, 76, 123, 119, 88, 233, 89 }, .{ 166, 196, 129, 219, 86, 43, 224, 95, 27, 148, 179, 135, 224, 77, 153, 239 }, .{ 145, 123, 214, 136, 152, 33, 17, 187, 240, 221, 45, 44, 122, 245, 85, 122 }, .{ 227, 89, 124, 3, 189, 228, 95, 53, 176, 118, 136, 32, 9, 253, 92, 7 }, .{ 233, 145, 171, 47, 119, 101, 40, 71, 214, 15, 107, 39, 172, 176, 226, 90 }, .{ 170, 119, 38, 156, 29, 66, 192, 47, 170, 69, 223, 188, 188, 27, 70, 34 }, .{ 77, 11, 23, 228, 173, 178, 236, 192, 80, 223, 110, 9, 188, 114, 125, 160 }, .{ 179, 197, 124, 22, 225, 54, 5, 216, 143, 58, 159, 63, 58, 88, 10, 197 }, .{ 46, 254, 132, 223, 27, 60, 121, 78, 165, 77, 182, 63, 169, 102, 151, 84 }, .{ 114, 202, 94, 75, 229, 58, 0, 185, 177, 11, 142, 38, 75, 16, 72, 241 }, .{ 235, 93, 246, 164, 150, 218, 195, 75, 2, 43, 120, 254, 202, 15, 55, 181 }, .{ 141, 132, 51, 149, 169, 2, 51, 254, 180, 26, 221, 218, 180, 253, 83, 55 }, .{ 186, 222, 114, 204, 231, 126, 161, 13, 110, 229, 148, 191, 98, 15, 164, 218 }, .{ 155, 235, 59, 193, 219, 185, 243, 212, 186, 84, 237, 45, 136, 141, 94, 238 }, .{ 234, 165, 58, 179, 228, 205, 186, 187, 248, 207, 79, 125, 191, 50, 229, 63 }, .{ 33, 95, 20, 15, 227, 199, 36, 2, 171, 161, 194, 243, 63, 188, 89, 39 }, .{ 93, 232, 105, 133, 51, 46, 193, 225, 122, 134, 68, 221, 73, 144, 184, 123 }, .{ 78, 209, 110, 31, 174, 234, 98, 29, 191, 101, 211, 75, 177, 245, 204, 174 }, .{ 158, 212, 123, 187, 163, 160, 187, 168, 135, 165, 20, 99, 154, 15, 85, 111 }, .{ 56, 148, 71, 122, 107, 77, 27, 173, 44, 140, 2, 14, 159, 247, 47, 110 }, .{ 117, 249, 231, 238, 209, 161, 34, 185, 173, 58, 96, 211, 236, 119, 163, 185 }, .{ 186, 105, 165, 164, 240, 116, 147, 236, 30, 12, 100, 9, 207, 80, 252, 70 }, .{ 34, 195, 162, 141, 60, 155, 24, 68, 68, 202, 216, 122, 197, 152, 222, 171 }, .{ 187, 107, 143, 149, 230, 139, 28, 201, 211, 237, 179, 121, 169, 236, 177, 86 }, .{ 250, 97, 255, 38, 108, 5, 96, 95, 17, 130, 247, 196, 207, 57, 113, 43 }, .{ 73, 23, 249, 197, 219, 243, 106, 63, 205, 222, 172, 199, 217, 34, 178, 37 }, .{ 60, 151, 18, 91, 94, 64, 14, 180, 24, 142, 241, 63, 70, 145, 199, 143 }, .{ 132, 216, 108, 113, 193, 121, 20, 191, 129, 233, 3, 188, 169, 32, 40, 134 }, .{ 33, 54, 157, 213, 141, 137, 64, 47, 47, 106, 38, 174, 94, 11, 248, 65 }, .{ 165, 76, 166, 254, 245, 35, 151, 30, 72, 73, 161, 145, 41, 212, 76, 161 }, .{ 106, 71, 87, 129, 16, 157, 125, 217, 119, 27, 92, 35, 86, 207, 32, 50 }, .{ 222, 86, 208, 75, 171, 167, 111, 233, 175, 110, 224, 164, 33, 116, 183, 226 }, .{ 234, 172, 110, 152, 92, 115, 244, 175, 75, 144, 227, 9, 4, 56, 245, 33 }, .{ 80, 88, 208, 10, 163, 177, 104, 19, 139, 69, 49, 120, 132, 179, 214, 139 }, .{ 233, 100, 154, 235, 213, 206, 54, 209, 65, 181, 22, 204, 173, 128, 167, 127 }, .{ 115, 151, 161, 182, 181, 232, 91, 69, 76, 189, 76, 243, 93, 150, 4, 160 }, .{ 117, 115, 77, 183, 16, 153, 143, 122, 59, 24, 192, 162, 252, 34, 240, 109 }, .{ 176, 118, 218, 110, 33, 14, 8, 163, 252, 105, 61, 20, 32, 114, 247, 65 }, .{ 230, 25, 161, 223, 173, 107, 212, 131, 233, 89, 95, 52, 137, 143, 164, 114 }, .{ 196, 11, 148, 18, 253, 59, 48, 120, 70, 73, 180, 131, 201, 39, 242, 59 }, .{ 223, 179, 182, 62, 43, 198, 139, 72, 239, 175, 38, 23, 105, 80, 232, 192 }, .{ 64, 250, 175, 123, 218, 253, 218, 107, 34, 109, 222, 38, 56, 130, 52, 36 }, .{ 24, 19, 74, 82, 95, 191, 48, 87, 183, 116, 221, 67, 92, 220, 88, 86 }, .{ 34, 150, 117, 174, 241, 56, 237, 235, 247, 231, 211, 165, 57, 40, 27, 5 }, .{ 10, 220, 233, 61, 141, 167, 118, 43, 211, 142, 188, 189, 146, 254, 149, 15 }, .{ 107, 135, 236, 3, 185, 17, 48, 66, 59, 120, 55, 78, 99, 193, 234, 123 }, .{ 65, 159, 53, 249, 8, 245, 252, 91, 238, 162, 218, 172, 5, 85, 226, 126 }, .{ 239, 174, 12, 32, 114, 165, 225, 24, 148, 141, 37, 139, 55, 112, 101, 14 }, .{ 93, 218, 130, 92, 129, 82, 110, 253, 94, 150, 37, 71, 28, 136, 109, 25 }, .{ 220, 248, 132, 193, 128, 161, 28, 182, 137, 176, 37, 64, 178, 175, 100, 17 }, .{ 222, 28, 206, 11, 113, 156, 200, 183, 16, 59, 181, 249, 128, 128, 78, 239 }, .{ 246, 143, 203, 255, 240, 134, 218, 5, 102, 157, 232, 137, 202, 92, 222, 92 }, .{ 54, 43, 61, 121, 95, 80, 181, 111, 62, 16, 62, 221, 89, 171, 85, 124 }, .{ 104, 124, 202, 164, 6, 127, 8, 212, 211, 111, 75, 184, 104, 123, 153, 141 }, .{ 43, 104, 217, 44, 180, 82, 44, 133, 169, 112, 44, 119, 59, 111, 40, 211 }, .{ 230, 238, 132, 179, 143, 0, 149, 10, 33, 28, 213, 144, 79, 242, 40, 184 }, .{ 229, 171, 198, 222, 79, 56, 22, 153, 160, 51, 147, 166, 61, 229, 243, 17 }, .{ 62, 189, 44, 195, 110, 41, 83, 109, 0, 177, 246, 190, 13, 239, 53, 78 }, .{ 1, 69, 72, 196, 194, 222, 95, 141, 131, 64, 0, 2, 96, 22, 23, 149 }, .{ 134, 131, 127, 87, 238, 170, 193, 138, 182, 245, 213, 9, 85, 156, 111, 31 }, .{ 128, 81, 113, 54, 175, 15, 162, 45, 254, 252, 10, 247, 213, 179, 85, 49 }, .{ 38, 180, 181, 65, 187, 123, 103, 26, 78, 179, 64, 111, 200, 3, 198, 27 }, .{ 230, 58, 110, 58, 168, 130, 33, 115, 79, 65, 113, 176, 67, 177, 144, 97 }, .{ 253, 158, 179, 44, 135, 188, 73, 51, 230, 44, 78, 129, 172, 41, 132, 250 }, .{ 202, 210, 242, 76, 120, 79, 139, 180, 96, 145, 169, 33, 43, 132, 9, 75 } };
+    var subscription = Subscription.init(1, std.math.maxInt(u64) - 1, std.mem.sliceAsBytes(rootHashes));
+    try std.testing.expectEqual(@as(usize, 126), subscription.roots.len);
 
-    var key: [16]u8 = undefined;
-    getKey(rs, rootHashes, 42069, &key);
+    const key = subscription.getKey(42069);
     try std.testing.expectEqual(bytes("7d4812bb046d7c7c30cf7d4380574a6c"), key);
 
     var frameData = bytes("d993a63f87a36ba26e73c3a727f07f2efc4fac720c9f5f42f3993c01a950d4b719c8cd5d3d606b11fef1417deea1499e03ca83ae0f9fb4e1f290e6e3865bdab9");
     crypto.decrypt(&frameData, key);
     try std.testing.expectEqualStrings("Bonjour le monde------------------------------------------------", &frameData);
+}
+
+fn bytes(comptime hex: []const u8) [hex.len / 2]u8 {
+    comptime var result = std.mem.zeroes([hex.len / 2]u8);
+    _ = comptime std.fmt.hexToBytes(&result, hex) catch @compileError("invalid hex: " ++ hex);
+    return result;
 }
