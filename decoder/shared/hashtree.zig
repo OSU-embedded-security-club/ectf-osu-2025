@@ -14,11 +14,8 @@ pub const Subscription = struct {
     };
 
     serialized: Bytes,
-
     roots: [126]RootPosition = undefined,
-
     cached_hashes: [65][16]u8 = undefined,
-
     root_index: isize = -1,
     last_timestamp: u64 = 0,
 
@@ -26,7 +23,7 @@ pub const Subscription = struct {
         return std.mem.asBytes(&self.serialized);
     }
 
-    pub fn init(start: u64, end: u64, root_hashes: []const u8) Subscription {
+    pub fn init(start: u64, end: u64, root_hash_bytes: []const u8) Subscription {
         if (start > end) {
             @panic("Invalid range: a > b");
         }
@@ -35,7 +32,7 @@ pub const Subscription = struct {
             .serialized = .{ .start = start, .end = end },
         };
 
-        var iter = std.mem.window(u8, root_hashes, 16, 16);
+        var iter = std.mem.window(u8, root_hash_bytes, 16, 16);
         var i: usize = 0;
         while (iter.next()) |hash| {
             @memcpy(&self.serialized.root_hashes[i], hash);
