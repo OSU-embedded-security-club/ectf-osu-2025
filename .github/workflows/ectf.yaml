@@ -38,17 +38,20 @@ jobs:
       run: docker run --rm -v ./build_out:/out -v ./:/decoder -v ./../secrets:/secrets -e DECODER_ID=0xdeadbeef decoder
 
     - name: Create artifact
+      if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
       uses: actions/upload-artifact@v4
       with:
         name: max78000.bin
         path: decoder/build_out/max78000.bin
 
     - name: Get tag name
+      if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
       id: tag-name
       run: |
         echo "tagname=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
     - name: Release
+      if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
