@@ -122,7 +122,7 @@ pub fn decode(body: []u8) !void {
             return error.NotInSubscriptionTimeRange;
         }
         var key: [16]u8 = undefined;
-        shared.hashtree.getKey(&shared.hashtree.subscriptionCache[dec.channel - 1], dec.timestamp, &key);
+        shared.hashtree.getKey(&root.subscriptionCache[dec.channel - 1], &subscription.hashes, dec.timestamp, &key);
 
         shared.crypto.decrypt(&dec.message, key);
     }
@@ -162,15 +162,13 @@ pub fn subscribe(body: []u8) !void {
         i += 1;
     }
 
+    var cache = &root.subscriptionCache[channelIndex];
+    cache.* = .{};
+    const max_roots = shared.hashtree.getRootPositions(header.start, header.end, &cache.roots);
+    cache.max_roots = max_roots;
+    shared.hashtree.heat(cache, &sub.*.?.hashes[0], cache.roots[0]);
+
     try flash.saveSubscriptions(@truncate(channelIndex));
-
-    shared.hashtree.subscriptionCache[channelIndex] = .{};
-    const max_roots = shared.hashtree.getRootPositions(header.start, header.end, &shared.hashtree.subscriptionCache[channelIndex].roots);
-    shared.hashtree.subscriptionCache[channelIndex].max_roots = max_roots;
-
-    // heat cache
-    var left_key: [16]u8 = undefined;
-    shared.hashtree.getKey(&shared.hashtree.subscriptionCache[channelIndex], 0, &left_key);
 
     try sendMessageWithAcks('S', &.{});
 }
@@ -180,7 +178,7 @@ pub fn ack() void {
     uart.writeBytes(&packet.asBytes());
 }
 
-var debugMessageBuffer: [65536]u8 = undefined;
+var debugMessageBuffer: [256]u8 = undefined;
 
 pub fn debugMessage(comptime format: []const u8, args: anytype) void {
     const text = std.fmt.bufPrint(debugMessageBuffer[4..], format, args) catch unreachable;

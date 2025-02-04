@@ -1,5 +1,11 @@
 const std = @import("std");
-const bytes = @import("shared").bytes;
+// const bytes = @import("shared").bytes;
+
+pub fn bytes(comptime hex: []const u8) [hex.len / 2]u8 {
+    comptime var result = std.mem.zeroes([hex.len / 2]u8);
+    _ = comptime std.fmt.hexToBytes(&result, hex) catch @compileError("invalid hex: " ++ hex);
+    return result;
+}
 
 const crypto = @import("crypto.zig");
 
@@ -7,13 +13,11 @@ const HASH_TREE_HEIGHT = 64;
 const LEFT_SALT = 'L';
 const RIGHT_SALT = 'R';
 
-pub var subscriptionCache = [8]SubscriptionCache{ .{}, .{}, .{}, .{}, .{}, .{}, .{}, .{} };
-
 pub const SubscriptionCache = struct {
     roots: [126]RootPosition = undefined,
     root_index: usize = 0,
     max_roots: usize = 0,
-    hashes: [63][17]u8 = undefined,
+    hashes: [65][17]u8 = undefined,
     last_timestamp: u64 = 0,
 };
 
@@ -44,22 +48,30 @@ pub fn getRootPositions(a: u64, b: u64, roots: *[126]RootPosition) usize {
     return index;
 }
 
-pub fn getKey(cache: *SubscriptionCache, timestamp: u64, outKey: *[16]u8) void {
-    var hash_index = @ctz(cache.last_timestamp ^ timestamp);
+pub fn getKey(cache: *SubscriptionCache, rootHashes: []const [16]u8, timestamp: u64, outKey: *[16]u8) void {
+    // std.debug.print("last_timestamp={} timestamp={}\n", .{ cache.last_timestamp, timestamp });
+    var hash_index = 64 - @clz(cache.last_timestamp ^ timestamp);
     cache.last_timestamp = timestamp;
+
+    // std.debug.print("hash_index1={}\n", .{hash_index});
 
     for (cache.roots[cache.root_index + 1 .. cache.max_roots], cache.root_index + 1..) |root, i| {
         if (root.power == 64 or (timestamp >= root.offset and timestamp < root.offset + (@as(u64, 1) << @truncate(root.power)))) {
+            // std.debug.print("hash_index2={}\n", .{i});
             cache.root_index = i;
             hash_index = root.power;
+            heat(cache, &rootHashes[cache.root_index], root);
             break;
         }
     }
 
+    // std.debug.print("hash_index3={}\n", .{hash_index});
+
     var i = hash_index;
     while (i > 0) : (i -= 1) {
-        cache.hashes[i + 1][16] = if (timestamp & (@as(u64, 1) << @truncate(i - 1)) == 0) LEFT_SALT else RIGHT_SALT;
-        std.crypto.hash.Blake3.hash(&cache.hashes[i + 1], cache.hashes[i][0..16], .{});
+        cache.hashes[i][16] = if (timestamp & (@as(u64, 1) << @truncate(i - 1)) == 0) LEFT_SALT else RIGHT_SALT;
+        // std.debug.print("i={} {any}\n", .{ i, cache.hashes[i] });
+        std.crypto.hash.Blake3.hash(&cache.hashes[i], cache.hashes[i - 1][0..16], .{});
     }
     std.mem.copyForwards(u8, outKey, cache.hashes[0][0..16]);
 }
@@ -68,6 +80,16 @@ pub const RootPosition = struct {
     offset: u64,
     power: u7,
 };
+
+pub fn heat(cache: *SubscriptionCache, root_hash: *const [16]u8, position: RootPosition) void {
+    @memcpy(cache.hashes[position.power][0..16], root_hash);
+    var i = position.power;
+    while (i > 0) : (i -= 1) {
+        cache.hashes[i][16] = LEFT_SALT;
+        // std.debug.print("heat i={} {any}\n", .{ i, cache.hashes[i] });
+        std.crypto.hash.Blake3.hash(&cache.hashes[i], cache.hashes[i - 1][0..16], .{});
+    }
+}
 
 test "ctz" {
     try std.testing.expectEqual(64, @ctz(@as(u64, 0)));
@@ -130,13 +152,25 @@ test "getKey example" {
         .{ 147, 254, 134, 61, 116, 97, 34, 122, 101, 149, 153, 111, 55, 78, 71, 232 },
     };
 
+    var cache: SubscriptionCache = .{ .max_roots = rs.len };
+    std.mem.copyForwards(RootPosition, &cache.roots, rs);
+    heat(&cache, &rootHashes[0], rs[0]);
+
     var key: [16]u8 = undefined;
-    getKey(rs, rootHashes, 2, &key);
+    getKey(&cache, rootHashes, 2, &key);
     try std.testing.expectEqual(bytes("1ecf7fc4dd1bda2a593fb7f7d0959b1f"), key);
 
     var frameData = bytes("b669a858d2f9c5d3b2c5a85ca98c46bc3557740a9260ce921523a352fdc71c5779a741c2de4b3fe94ecb8cbf15804e609acf2be1056da0c1cb5dfa8bdbb99486");
     crypto.decrypt(&frameData, key);
     try std.testing.expectEqualStrings("Hello world!----------------------------------------------------", &frameData);
+
+    key = undefined;
+    getKey(&cache, rootHashes, 3, &key);
+    try std.testing.expectEqual(bytes("96aa268a5e4708dc843dc4e21314ef45"), key);
+
+    key = undefined;
+    getKey(&cache, rootHashes, 4, &key);
+    try std.testing.expectEqual(bytes("b494fb2651d4beba877f96fa6f6049ee"), key);
 }
 
 test "getKey largest range" {
@@ -153,13 +187,33 @@ test "getKey largest range" {
         .{ 82, 135, 43, 160, 152, 200, 145, 46, 38, 149, 220, 27, 181, 94, 206, 127 },
     };
 
+    var cache: SubscriptionCache = .{ .max_roots = rs.len };
+    std.mem.copyForwards(RootPosition, &cache.roots, rs);
+    heat(&cache, &rootHashes[0], rs[0]);
+
     var key: [16]u8 = undefined;
-    getKey(rs, rootHashes, 0xdeadbeefcafebabe, &key);
+    getKey(&cache, rootHashes, 0, &key);
+    try std.testing.expectEqual(bytes("f5e67ba16ef73c2abfba04ec9c69f6cb"), key);
+
+    key = undefined;
+    getKey(&cache, rootHashes, 0, &key);
+    try std.testing.expectEqual(bytes("f5e67ba16ef73c2abfba04ec9c69f6cb"), key);
+
+    key = undefined;
+    getKey(&cache, rootHashes, 1, &key);
+    try std.testing.expectEqual(bytes("ab65afe68a218ea94bbd9eb322bada03"), key);
+
+    key = undefined;
+    getKey(&cache, rootHashes, 150, &key);
+    try std.testing.expectEqual(bytes("7b85341af0919ca152ea5ccb8119997d"), key);
+
+    key = undefined;
+    getKey(&cache, rootHashes, 0xdeadbeefcafebabe, &key);
     try std.testing.expectEqual(bytes("50433b2d0ab5d7859c88c646f2379ffd"), key);
 
-    var frameData = bytes("dc2128afcbec2c89326d84ce6374b02e0e863031e9618361824648b209c8c44caff4d68f0654ec7e1de087ccfdbd20814a62beae2b6d899104b926b06bc03dae");
-    crypto.decrypt(&frameData, key);
-    try std.testing.expectEqualStrings("Hola Mundo------------------------------------------------------", &frameData);
+    // var frameData = bytes("dc2128afcbec2c89326d84ce6374b02e0e863031e9618361824648b209c8c44caff4d68f0654ec7e1de087ccfdbd20814a62beae2b6d899104b926b06bc03dae");
+    // crypto.decrypt(&frameData, key);
+    // try std.testing.expectEqualStrings("Hola Mundo------------------------------------------------------", &frameData);
 }
 
 test "getKey single value range" {

@@ -15,13 +15,13 @@ def main():
     secrets = open('secrets/secrets.json', 'rb').read()
 
     channel = 1
-    decoder.subscribe(gen_subscription(secrets=secrets, device_id=0xdeadbeef, start=0, end=2**64 - 1, channel=channel))
+    decoder.subscribe(gen_subscription(secrets=secrets, device_id=0xdeadbeef, start=1, end=2**64 - 2, channel=channel))
 
     raw_frames = [random.randbytes(64) for _ in range(100)]
 
     # Encode all the frames before starting the timer
     encoder = Encoder(secrets=secrets)
-    encoded_frames = [encoder.encode(channel=channel, frame=frame, timestamp=i+1) for (i, frame) in enumerate(raw_frames)]
+    encoded_frames = [encoder.encode(channel=channel, frame=frame, timestamp=(i+1)*1000) for (i, frame) in enumerate(raw_frames)]
 
     t = time.perf_counter()
     for (raw_frame, encoded_frame) in zip(raw_frames, encoded_frames):

@@ -9,6 +9,7 @@ const uart = @import("uart.zig");
 const messaging = @import("host_messaging.zig");
 
 pub var subscriptions = [8]?messaging.Subscription{ null, null, null, null, null, null, null, null };
+pub var subscriptionCache = [8]shared.hashtree.SubscriptionCache{ .{}, .{}, .{}, .{}, .{}, .{}, .{}, .{} };
 const MAXIMUM_MESSAGE_SIZE = @sizeOf(messaging.SubscribeHeader) + @sizeOf(messaging.Subscription);
 var message_body_buffer: [MAXIMUM_MESSAGE_SIZE]u8 = undefined;
 

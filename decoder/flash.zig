@@ -46,6 +46,13 @@ pub fn init() !void {
                 .end = 0,
             };
             msdk.MXC_FLC_Read(@intCast(FLASH_START_ADDR + (i * msdk.MXC_FLASH_PAGE_SIZE)), &root.subscriptions[i - 1].?, @sizeOf(@TypeOf(root.subscriptions[i - 1].?)));
+
+            var cache = &root.subscriptionCache[i - 1];
+            const subscription = &root.subscriptions[i - 1].?;
+            cache.* = .{};
+            const max_roots = shared.hashtree.getRootPositions(subscription.start, subscription.end, &cache.roots);
+            cache.max_roots = max_roots;
+            shared.hashtree.heat(cache, &subscription.hashes[0], cache.roots[0]);
         }
     }
 }
