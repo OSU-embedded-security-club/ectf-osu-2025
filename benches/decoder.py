@@ -15,7 +15,7 @@ def main():
     secrets = open('secrets/secrets.json', 'rb').read()
 
     channel = 1
-    decoder.subscribe(gen_subscription(secrets=secrets, device_id=0xdeadbeef, start=1, end=2**64 - 2, channel=channel))
+    decoder.subscribe(gen_subscription(secrets=secrets, device_id=0xdeadbeef, start=0, end=2**64 - 1, channel=channel))
 
     raw_frames = [random.randbytes(64) for _ in range(100)]
 

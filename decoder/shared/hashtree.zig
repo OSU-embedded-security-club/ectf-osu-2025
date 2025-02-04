@@ -7,6 +7,16 @@ const HASH_TREE_HEIGHT = 64;
 const LEFT_SALT = 'L';
 const RIGHT_SALT = 'R';
 
+pub var subscriptionCache = [8]SubscriptionCache{ .{}, .{}, .{}, .{}, .{}, .{}, .{}, .{} };
+
+pub const SubscriptionCache = struct {
+    roots: [126]RootPosition = undefined,
+    root_index: usize = 0,
+    max_roots: usize = 0,
+    hashes: [63][17]u8 = undefined,
+    last_timestamp: u64 = 0,
+};
+
 pub fn getRootPositions(a: u64, b: u64, roots: *[126]RootPosition) usize {
     if (a > b) {
         @panic("Invalid range: a > b");
@@ -34,29 +44,24 @@ pub fn getRootPositions(a: u64, b: u64, roots: *[126]RootPosition) usize {
     return index;
 }
 
-pub fn getKey(roots: []RootPosition, rootHashes: []const [16]u8, timestamp: u64, outKey: *[16]u8) void {
-    if (roots.len != rootHashes.len) {
-        @panic("roots and rootHashes must be the same length");
-    }
+pub fn getKey(cache: *SubscriptionCache, timestamp: u64, outKey: *[16]u8) void {
+    var hash_index = @ctz(cache.last_timestamp ^ timestamp);
+    cache.last_timestamp = timestamp;
 
-    var rootIndex: usize = 0;
-    for (roots, 0..) |root, i| {
+    for (cache.roots[cache.root_index + 1 .. cache.max_roots], cache.root_index + 1..) |root, i| {
         if (root.power == 64 or (timestamp >= root.offset and timestamp < root.offset + (@as(u64, 1) << @truncate(root.power)))) {
-            rootIndex = i;
+            cache.root_index = i;
+            hash_index = root.power;
             break;
         }
     }
 
-    const root = roots[rootIndex];
-    var buf: [17]u8 = undefined;
-    @memcpy(buf[0..16], &rootHashes[rootIndex]);
-
-    var i = root.power;
+    var i = hash_index;
     while (i > 0) : (i -= 1) {
-        buf[16] = if (timestamp & (@as(u64, 1) << @truncate(i - 1)) == 0) LEFT_SALT else RIGHT_SALT;
-        std.crypto.hash.Blake3.hash(&buf, buf[0..16], .{});
+        cache.hashes[i + 1][16] = if (timestamp & (@as(u64, 1) << @truncate(i - 1)) == 0) LEFT_SALT else RIGHT_SALT;
+        std.crypto.hash.Blake3.hash(&cache.hashes[i + 1], cache.hashes[i][0..16], .{});
     }
-    @memcpy(outKey, buf[0..16]);
+    std.mem.copyForwards(u8, outKey, cache.hashes[0][0..16]);
 }
 
 pub const RootPosition = struct {

@@ -121,10 +121,8 @@ pub fn decode(body: []u8) !void {
             debugMessage("Not in subscription time range", .{});
             return error.NotInSubscriptionTimeRange;
         }
-        var roots: [126]shared.hashtree.RootPosition = undefined;
-        _ = shared.hashtree.getRootPositions(subscription.start, subscription.end, &roots);
         var key: [16]u8 = undefined;
-        shared.hashtree.getKey(&roots, &subscription.hashes, dec.timestamp, &key);
+        shared.hashtree.getKey(&shared.hashtree.subscriptionCache[dec.channel - 1], dec.timestamp, &key);
 
         shared.crypto.decrypt(&dec.message, key);
     }
@@ -149,7 +147,8 @@ pub fn subscribe(body: []u8) !void {
     std.crypto.stream.salsa.Salsa20.xor(body, body, 0, key, std.mem.zeroes([8]u8));
 
     const header: *const SubscribeHeader = @ptrCast(body.ptr);
-    const sub = &root.subscriptions[header.channel - 1];
+    const channelIndex = header.channel - 1;
+    const sub = &root.subscriptions[channelIndex];
 
     sub.* = .{
         .start = header.start,
@@ -163,7 +162,15 @@ pub fn subscribe(body: []u8) !void {
         i += 1;
     }
 
-    try flash.saveSubscriptions(@truncate(header.channel - 1));
+    try flash.saveSubscriptions(@truncate(channelIndex));
+
+    shared.hashtree.subscriptionCache[channelIndex] = .{};
+    const max_roots = shared.hashtree.getRootPositions(header.start, header.end, &shared.hashtree.subscriptionCache[channelIndex].roots);
+    shared.hashtree.subscriptionCache[channelIndex].max_roots = max_roots;
+
+    // heat cache
+    var left_key: [16]u8 = undefined;
+    shared.hashtree.getKey(&shared.hashtree.subscriptionCache[channelIndex], 0, &left_key);
 
     try sendMessageWithAcks('S', &.{});
 }
