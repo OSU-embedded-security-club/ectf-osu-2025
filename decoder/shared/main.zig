@@ -3,6 +3,10 @@ const std = @import("std");
 pub const hashtree = @import("hashtree.zig");
 pub const crypto = @import("crypto.zig");
 
+comptime {
+    _ = @import("hashtree.zig");
+}
+
 /// See https://github.com/analogdevicesinc/msdk/blob/4f0d3d320b29c455153ea16dc34a08d87ddd85a8/Libraries/PeriphDrivers/Include/MAX78000/mxc_errors.h
 const MXCError = enum(c_int) {
     E_NO_ERROR = 0,
@@ -67,10 +71,4 @@ pub fn msdkTry(err: c_int) MSDKError!void {
         MXCError.E_NOT_SUPPORTED => return error.NOT_SUPPORTED,
         MXCError.E_FAIL => return error.FAIL,
     }
-}
-
-pub fn bytes(comptime hex: []const u8) [hex.len / 2]u8 {
-    comptime var result = std.mem.zeroes([hex.len / 2]u8);
-    _ = comptime std.fmt.hexToBytes(&result, hex) catch @compileError("invalid hex: " ++ hex);
-    return result;
 }
