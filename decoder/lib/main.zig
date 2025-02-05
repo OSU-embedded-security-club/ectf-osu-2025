@@ -1,10 +1,11 @@
 const std = @import("std");
 
-pub const hashtree = @import("hashtree.zig");
+pub const Subscription = @import("subscription.zig").Subscription;
 pub const crypto = @import("crypto.zig");
 
+// zig needs comptime imports to not optimize out our unit tests
 comptime {
-    _ = @import("hashtree.zig");
+    _ = @import("subscription.zig");
 }
 
 /// See https://github.com/analogdevicesinc/msdk/blob/4f0d3d320b29c455153ea16dc34a08d87ddd85a8/Libraries/PeriphDrivers/Include/MAX78000/mxc_errors.h

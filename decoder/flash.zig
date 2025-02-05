@@ -1,7 +1,7 @@
 const std = @import("std");
 const msdk = @import("msdk");
-const messaging = @import("host_messaging.zig");
-const shared = @import("shared");
+const messaging = @import("messaging.zig");
+const lib = @import("lib");
 const root = @import("root");
 
 fn irq() callconv(.C) void {
@@ -9,12 +9,12 @@ fn irq() callconv(.C) void {
 
     if (temp & msdk.MXC_F_FLC_INTR_DONE != 0) {
         msdk.MXC_FLC0.*.intr &= ~msdk.MXC_F_FLC_INTR_DONE;
-        messaging.debugMessage(" -> Interrupt! (Flash access done)", .{});
+        messaging.sendDebug(" -> Interrupt! (Flash access done)", .{});
     }
 
     if (temp & msdk.MXC_F_FLC_INTR_AF != 0) {
         msdk.MXC_FLC0.*.intr &= ~msdk.MXC_F_FLC_INTR_AF;
-        messaging.debugMessage(" -> Interrupt! (Flash access failure)", .{});
+        messaging.sendDebug(" -> Interrupt! (Flash access failure)", .{});
     }
 }
 
@@ -23,27 +23,27 @@ pub fn init() !void {
     @fence(std.builtin.AtomicOrder.seq_cst);
     msdk.NVIC_EnableIRQ(msdk.FLC0_IRQn);
     @fence(std.builtin.AtomicOrder.seq_cst);
-    try shared.msdkTry(msdk.MXC_FLC_EnableInt(msdk.MXC_F_FLC_INTR_DONEIE | msdk.MXC_F_FLC_INTR_AFIE));
+    try lib.msdkTry(msdk.MXC_FLC_EnableInt(msdk.MXC_F_FLC_INTR_DONEIE | msdk.MXC_F_FLC_INTR_AFIE));
     msdk.MXC_ICC_Disable(msdk.MXC_ICC0);
 
     var meta: PageMeta = undefined;
-    msdk.MXC_FLC_Read(FLASH_START_ADDR, &meta, @sizeOf(@TypeOf(meta)));
+    msdk.MXC_FLC_Read(flash_start_address, &meta, @sizeOf(@TypeOf(meta)));
 
-    if (meta.first_boot != FIRST_BOOT_MAGIC) {
-        messaging.debugMessage("First boot!", .{});
+    if (meta.first_boot != first_boot_magic) {
+        messaging.sendDebug("First boot!", .{});
         meta = .{};
 
-        try shared.msdkTry(msdk.MXC_FLC_PageErase(FLASH_START_ADDR));
-        try write(FLASH_START_ADDR, std.mem.asBytes(&meta));
+        try lib.msdkTry(msdk.MXC_FLC_PageErase(flash_start_address));
+        try write(flash_start_address, std.mem.asBytes(&meta));
         return;
     }
 
     for (meta.valid, 1..) |valid, i| {
         if (valid) {
-            messaging.debugMessage("Reading saved subscription {}", .{i});
-            var subscriptionBytes: shared.hashtree.Subscription.Bytes = undefined;
-            read(FLASH_START_ADDR + (i * msdk.MXC_FLASH_PAGE_SIZE), &subscriptionBytes);
-            root.subscriptions[i - 1] = shared.hashtree.Subscription.init(subscriptionBytes.start, subscriptionBytes.end, std.mem.asBytes(&subscriptionBytes.root_hashes));
+            messaging.sendDebug("Reading saved subscription {}", .{i});
+            var subscription_bytes: lib.Subscription.Bytes = undefined;
+            read(flash_start_address + (i * msdk.MXC_FLASH_PAGE_SIZE), &subscription_bytes);
+            root.subscriptions[i - 1] = lib.Subscription.init(subscription_bytes.start, subscription_bytes.end, std.mem.asBytes(&subscription_bytes.root_hashes));
         }
     }
 }
@@ -53,10 +53,10 @@ fn read(address: usize, v: anytype) void {
 }
 
 fn write(address: usize, buffer: []u8) !void {
-    try shared.msdkTry(msdk.MXC_FLC_Write(address, buffer.len, @ptrCast(@alignCast(buffer.ptr))));
+    try lib.msdkTry(msdk.MXC_FLC_Write(address, buffer.len, @ptrCast(@alignCast(buffer.ptr))));
 }
 
-pub fn saveSubscriptions(channelIndex: u3) !void {
+pub fn saveSubscriptions(channel_index: u3) !void {
     var meta = PageMeta{};
     for (root.subscriptions, 0..) |subscription, i| {
         if (subscription) |_| {
@@ -64,19 +64,18 @@ pub fn saveSubscriptions(channelIndex: u3) !void {
         }
     }
 
-    try shared.msdkTry(msdk.MXC_FLC_PageErase(FLASH_START_ADDR));
-    try write(FLASH_START_ADDR, std.mem.asBytes(&meta));
+    try lib.msdkTry(msdk.MXC_FLC_PageErase(flash_start_address));
+    try write(flash_start_address, std.mem.asBytes(&meta));
 
-    const addr = FLASH_START_ADDR + msdk.MXC_FLASH_PAGE_SIZE * (@as(usize, channelIndex) + 1);
-    try shared.msdkTry(msdk.MXC_FLC_PageErase(addr));
-    try write(addr, std.mem.asBytes(&root.subscriptions[channelIndex].?));
+    const addr = flash_start_address + msdk.MXC_FLASH_PAGE_SIZE * (@as(usize, channel_index) + 1);
+    try lib.msdkTry(msdk.MXC_FLC_PageErase(addr));
+    try write(addr, std.mem.asBytes(&root.subscriptions[channel_index].?));
 }
 
 const PageMeta = extern struct {
-    first_boot: u64 = FIRST_BOOT_MAGIC,
+    first_boot: u64 = first_boot_magic,
     valid: [8]bool = std.mem.zeroes([8]bool),
 };
 
-const FIRST_BOOT_MAGIC: u64 = 0xdeadbeefcafebabe;
-
-pub const FLASH_START_ADDR = msdk.MXC_FLASH_MEM_BASE + msdk.MXC_FLASH_MEM_SIZE - (10 * msdk.MXC_FLASH_PAGE_SIZE);
+const first_boot_magic: u64 = 0xdeadbeefcafebabe;
+const flash_start_address = msdk.MXC_FLASH_MEM_BASE + msdk.MXC_FLASH_MEM_SIZE - (10 * msdk.MXC_FLASH_PAGE_SIZE);

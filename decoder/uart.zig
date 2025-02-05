@@ -1,15 +1,15 @@
-const shared = @import("shared");
-const msdk = @import("msdk");
 const std = @import("std");
+const msdk = @import("msdk");
+const lib = @import("lib");
 
 pub fn init() !void {
-    try shared.msdkTry(msdk.MXC_UART_Init(msdk.MXC_UART_GET_UART(msdk.CONSOLE_UART), msdk.CONSOLE_BAUD, msdk.MXC_UART_IBRO_CLK));
+    try lib.msdkTry(msdk.MXC_UART_Init(msdk.MXC_UART_GET_UART(msdk.CONSOLE_UART), msdk.CONSOLE_BAUD, msdk.MXC_UART_IBRO_CLK));
 }
 
 pub fn readByte() !u8 {
     const data = msdk.MXC_UART_ReadCharacter(msdk.MXC_UART_GET_UART(msdk.CONSOLE_UART));
     if (data < 0) {
-        try shared.msdkTry(data);
+        try lib.msdkTry(data);
     }
     return @intCast(data);
 }

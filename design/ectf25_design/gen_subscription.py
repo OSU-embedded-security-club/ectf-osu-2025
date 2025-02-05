@@ -65,9 +65,9 @@ def gen_subscription(
         print(root, curr.hex())
         hashes.append(curr)
 
-    subscription_key = bytes.fromhex(secrets["subscription_key"])
-    print(f"{subscription_key.hex()}{device_id:08x}")
-    key = blake3(f"{subscription_key.hex()}{device_id:08x}".encode()).digest()
+    subscription_salt = bytes.fromhex(secrets["subscription_salt"])
+    print(f"{subscription_salt.hex()}{device_id:08x}")
+    key = blake3(f"{subscription_salt.hex()}{device_id:08x}".encode()).digest()
 
     # Pack the subscription. This will be sent to the decoder with ectf25.tv.subscribe
     return Salsa20.new(key=key, nonce=bytes(0 for i in range(8))).encrypt(struct.pack("<QQB", start, end, channel) + b''.join(hashes))

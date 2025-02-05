@@ -1,8 +1,8 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) !void {
-    const decoderStep = b.step("decoder", "Build the Decoder");
-    b.default_step.dependOn(decoderStep);
+    const decoder_step = b.step("decoder", "Build the Decoder");
+    b.default_step.dependOn(decoder_step);
 
     const target = b.resolveTargetQuery(.{
         .cpu_arch = .thumb,
@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) !void {
         .ofmt = .c,
     });
 
-    const decoderExe = b.addExecutable(.{
+    const decoder_exe = b.addExecutable(.{
         .root_source_file = b.path("main.zig"),
         .single_threaded = true,
         .target = target,
@@ -21,7 +21,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     const unit_tests = b.addTest(.{
-        .root_source_file = b.path("shared/main.zig"),
+        .root_source_file = b.path("lib/main.zig"),
         .target = b.resolveTargetQuery(.{}),
         .link_libc = true,
     });
@@ -31,8 +31,8 @@ pub fn build(b: *std.Build) !void {
 
     var options = b.addOptions();
     const secrets = try getSecrets(b.allocator);
-    options.addOption(@TypeOf(secrets.subscription_key), "subscriptionKey", secrets.subscription_key);
-    options.addOption(@TypeOf(secrets.public_key), "publicKey", secrets.public_key);
+    options.addOption(@TypeOf(secrets.subscription_key), "subscription_key", secrets.subscription_key);
+    options.addOption(@TypeOf(secrets.public_key), "public_key", secrets.public_key);
 
     if (env.get("MAXIM_PATH")) |msdk_path| {
         const msdk = b.addTranslateC(.{
@@ -93,11 +93,10 @@ pub fn build(b: *std.Build) !void {
 
         msdk.defineCMacroRaw("__PROGRAM_START");
 
-        const msdkModule = msdk.createModule();
-        decoderExe.root_module.addImport("msdk", msdkModule);
+        const msdk_module = msdk.createModule();
+        decoder_exe.root_module.addImport("msdk", msdk_module);
 
-        // decoderStep.dependOn(&b.addInstallFile(msdk.getOutput(), "msdk.zig").step);
-        decoderStep.dependOn(&msdk.step);
+        decoder_step.dependOn(&msdk.step);
     }
 
     if (env.get("ED25519_PATH")) |ed25519_path| {
@@ -116,9 +115,9 @@ pub fn build(b: *std.Build) !void {
         unit_tests.addIncludePath(.{ .cwd_relative = ed25519_path });
         unit_tests.addIncludePath(b.path("."));
 
-        const ed25519Module = ed25519.createModule();
-        decoderExe.root_module.addImport("ed25519", ed25519Module);
-        unit_tests.root_module.addImport("ed25519", ed25519Module);
+        const ed25519_module = ed25519.createModule();
+        decoder_exe.root_module.addImport("ed25519", ed25519_module);
+        unit_tests.root_module.addImport("ed25519", ed25519_module);
 
         unit_tests.addCSourceFiles(.{ .root = .{ .cwd_relative = ed25519_path }, .files = &.{
             "src/add_scalar.c",
@@ -133,29 +132,29 @@ pub fn build(b: *std.Build) !void {
             "src/verify.c",
         } });
 
-        decoderStep.dependOn(&ed25519.step);
+        decoder_step.dependOn(&ed25519.step);
         test_step.dependOn(&ed25519.step);
     }
 
-    const sharedModule = b.createModule(.{
-        .root_source_file = b.path("shared/main.zig"),
+    const lib_module = b.createModule(.{
+        .root_source_file = b.path("lib/main.zig"),
     });
 
-    decoderExe.root_module.addOptions("secrets", options);
-    decoderExe.root_module.addImport("shared", sharedModule);
+    decoder_exe.root_module.addOptions("secrets", options);
+    decoder_exe.root_module.addImport("lib", lib_module);
 
     const lib_dir_step = try ZigLibDir.create(b);
-    decoderStep.dependOn(&lib_dir_step.step);
-    decoderStep.dependOn(&b.addInstallFile(lib_dir_step.getLibPath().path(b, "zig.h"), "../c/src/zig.h").step);
+    decoder_step.dependOn(&lib_dir_step.step);
+    decoder_step.dependOn(&b.addInstallFile(lib_dir_step.getLibPath().path(b, "zig.h"), "../c/src/zig.h").step);
 
-    decoderStep.dependOn(&b.addInstallArtifact(decoderExe, .{ .dest_dir = .{ .override = .{ .custom = "../c/src" } } }).step);
+    decoder_step.dependOn(&b.addInstallArtifact(decoder_exe, .{ .dest_dir = .{ .override = .{ .custom = "../c/src" } } }).step);
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
     test_step.dependOn(&run_unit_tests.step);
 
     const docs = b.addObject(.{
         .name = "main",
-        .root_source_file = b.path("shared/main.zig"),
+        .root_source_file = b.path("lib/main.zig"),
         .target = target,
         .optimize = .Debug,
     });
@@ -167,7 +166,7 @@ pub fn build(b: *std.Build) !void {
     const docs_step = b.step("docs", "Generate documentation");
     docs_step.dependOn(&install_docs.step);
 
-    decoderStep.dependOn(&decoderExe.step);
+    decoder_step.dependOn(&decoder_exe.step);
 }
 
 const Secrets = struct {
@@ -185,24 +184,24 @@ fn getSecrets(allocator: std.mem.Allocator) !Secrets {
     defer allocator.free(contents);
 
     const SecretsJson = struct {
-        subscription_key: []const u8,
+        subscription_salt: []const u8,
         public_key: []const u8,
     };
 
     const secrets = try std.json.parseFromSlice(SecretsJson, allocator, contents, .{ .ignore_unknown_fields = true });
     defer secrets.deinit();
 
-    const deviceId = env.get("DECODER_ID") orelse "0xdeadbeef";
-    const deviceIdInt = try std.fmt.parseInt(u32, deviceId, 0);
-    const deviceSubscriptionStr = try std.fmt.allocPrint(allocator, "{s}{x:0>8}", .{ secrets.value.subscription_key, deviceIdInt });
-    var deviceSubscriptionKey: [32]u8 = undefined;
-    std.crypto.hash.Blake3.hash(deviceSubscriptionStr, &deviceSubscriptionKey, .{});
+    const device_id = env.get("DECODER_ID") orelse "0xdeadbeef";
+    const device_id_int = try std.fmt.parseInt(u32, device_id, 0);
+    const device_subscription_str = try std.fmt.allocPrint(allocator, "{s}{x:0>8}", .{ secrets.value.subscription_salt, device_id_int });
+    var device_subscription_key: [32]u8 = undefined;
+    std.crypto.hash.Blake3.hash(device_subscription_str, &device_subscription_key, .{});
 
     var publicKey: [32]u8 = undefined;
     _ = try std.fmt.hexToBytes(&publicKey, secrets.value.public_key);
 
     return Secrets{
-        .subscription_key = deviceSubscriptionKey,
+        .subscription_key = device_subscription_key,
         .public_key = publicKey,
     };
 }
