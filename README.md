@@ -1,8 +1,8 @@
 # OSU Satellite TV for MITRE eCTF 2025
 
-[![Zig](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/zig.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/zig.yaml) [![eCTF](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/ectf.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/ectf.yaml)
+[![Zig version 0.13.0](https://img.shields.io/badge/Zig-0.13.0-f7a41d?logo=zig)](https://ziglang.org) [![Zig](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/zig.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/zig.yaml) [![eCTF](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/ectf.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/ectf.yaml)
 
-This repo contains all the code and documentation for team scriptohio from The Ohio State University in [MITRE's eCTF 2025](https://rules.ectf.mitre.org/2025/index.html).
+This repo contains all the code and documentation for team `scriptohio` from The Ohio State University in [MITRE's eCTF 2025](https://rules.ectf.mitre.org/2025/index.html).
 
 Highlights of our design:
 
@@ -24,6 +24,8 @@ Highlights of our design:
 - `tools` - MITRE provided Host tools to interact with the decoder (Not modified)
 
 ## Documentation 📖
+
+[![Typst 0.12.0](https://img.shields.io/badge/Typst-0.12.0-239dad?logo=typst)](https://typst.app/home)
 
 The design document is available to read as a PDF here:
 
