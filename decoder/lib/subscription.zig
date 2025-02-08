@@ -55,14 +55,12 @@ pub const Subscription = struct {
         var start = self.serialized.start;
 
         while (start <= self.serialized.end) {
-            var power: u6 = 0;
-            while (power + 1 <= @ctz(start) and (@as(u64, 1) << (power + 1)) <= self.serialized.end - start + 1) power += 1;
+            const power = @min(@as(u6, @intCast(@bitSizeOf(u64) - 1 - @clz(self.serialized.end - start + 1))), @ctz(start));
 
             self.roots[index] = RootPosition{ .offset = start, .power = power };
             index += 1;
 
-            const end = start + (@as(u64, 1) << power) - 1;
-            start = end + 1;
+            start += @as(u64, 1) << power;
         }
     }
 
