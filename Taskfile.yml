@@ -17,6 +17,7 @@ tasks:
     desc: Build documentation design file into PDF and SVG artifacts
     dir: docs
     cmds:
+      - typstyle -i design.typ
       - typst compile design.typ
       - typst compile design.typ pages/page-{p}.svg
 

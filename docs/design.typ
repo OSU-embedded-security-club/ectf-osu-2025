@@ -4,7 +4,7 @@
 #set page("us-letter", numbering: "1")
 
 #show ref: it => {
-  let target = str(it.target);
+  let target = str(it.target)
   if target.starts-with("sr") {
     let match = target.match(regex("sr(\d)"))
     if it.supplement != auto {
@@ -24,7 +24,9 @@
   }
 }
 
-#set table(stroke: (_, y) => if y == 0 { (bottom: 1pt) })
+#set table(stroke: (_, y) => if y == 0 {
+  (bottom: 1pt)
+})
 
 #align(center, text(size: 18pt, [OSU Satellite TV for MITRE eCTF 2025]))
 
@@ -68,7 +70,7 @@ The two main components are the Encoder and Decoder. The encoder receives frames
 
 #figure(
   image("2025 eCTF High Level System.png"),
-  caption: [Full system with blue highlights indicating components which need to be implemented. @mitreECTF]
+  caption: [Full system with blue highlights indicating components which need to be implemented. @mitreECTF],
 )
 
 === Functional Requirement 1: List Channels
@@ -157,59 +159,77 @@ The firmware must be built for each separate decoder device. When building, spec
 
 #let bytesize(bytes) = rect(width: 4pt * bytes, height: 5pt, fill: navy)
 
-#align(center, table(
-  columns: 3,
-  align: left,
-  table.header([Field Name], [Size], [Relative Size]),
-  [Channel ID], [1 byte], bytesize(1),
-  [Timestamp], [8 bytes], bytesize(8),
-  [Message], [64 bytes], bytesize(64),
-  [Signature], [64 bytes], bytesize(64),
-))
+#align(
+  center,
+  table(
+    columns: 3,
+    align: left,
+    table.header([Field Name], [Size], [Relative Size]),
+    [Channel ID], [1 byte], bytesize(1),
+    [Timestamp], [8 bytes], bytesize(8),
+    [Message], [64 bytes], bytesize(64),
+    [Signature], [64 bytes], bytesize(64),
+  ),
+)
 
 Each frame has an integer timestamp $t in [0, 2^64 - 1]$. Each timestamp has a unique symmetric key $k_t$ which the encoder will use to encrypt the message, and the decoder will use to decrypt the message, both using Salsa20. The keys are derived with a _binary hash key derivation tree_. Let $H$ be a cryptographic hash function. We have chosen $H="blake3"$. Let $L$ and $R$ be salted hash functions $L(x)=H(x + \""left"\")$ and $R(x)=H(x+\""right"\")$. The encoder uses secret $S_"channel_id"$ for the channel id currently being broadcasted, and generates a root hash $h=H(S)$. Then, two hashes $h_0=L(h)$ and $h_1=L(h)$ are derived. Then $h_00=L(h_0)$, $h_01=R(h_0)$, $h_10=L(h_1)$, and $h_11=R(h_1)$, and so on. This process continues to form a tree of height $64$. The leaves of the tree form the keys $k_t$, one for every timestamp. @hash-key-derivation-tree shows a hash key derivation tree for $t in [0, 7]$ and has $8$ leaves. Note that the full sized tree has $2^64$ leaves, the leaves are computed on demand for particular timestamps since it would be computationally infeasible to precompute all keys for such a large tree.
 
 #figure(
-align(center,
-cetz.canvas({
-  import cetz.draw: *
+  align(
+    center,
+    cetz.canvas({
+      import cetz.draw: *
 
-  set-style(mark: (fill: black, scale: 1))
+      set-style(mark: (fill: black, scale: 1))
 
-  let height = 4
-  let xscale = 1.5
-  for i in range(height) {
-    let y = -(i * 3)
-    let ynext = -((i+1) * 3)
-    for j in range(calc.pow(2,i)) {
-      let z = calc.pow(2,height - i)/2
-      let h = j * z
-      let x = h * xscale
-      let xnext = (h + z) * xscale
-      let xrightchild = (h + z/2.1) * xscale
-      circle((x, y), radius: .5)
-      if i == height - 1 {
-        content((x,y), $k_#h$)
-      } else {
-        let nums = ()
-        for I in range(i) {
-          let d = calc.rem(calc.floor(h / (calc.pow(2, height - 2 - I))), 2)
-          nums.push(d)
+      let height = 4
+      let xscale = 1.5
+      for i in range(height) {
+        let y = -(i * 3)
+        let ynext = -((i + 1) * 3)
+        for j in range(calc.pow(2, i)) {
+          let z = calc.pow(2, height - i) / 2
+          let h = j * z
+          let x = h * xscale
+          let xnext = (h + z) * xscale
+          let xrightchild = (h + z / 2.1) * xscale
+          circle((x, y), radius: .5)
+          if i == height - 1 {
+            content((x, y), $k_#h$)
+          } else {
+            let nums = ()
+            for I in range(i) {
+              let d = calc.rem(calc.floor(h / (calc.pow(2, height - 2 - I))), 2)
+              nums.push(d)
+            }
+            content((x, y), $h_#nums.map(x => $#x$).join()$)
+          }
+          if i != height - 1 {
+            line((x + .5, y), (xnext - 1, y))
+            line(
+              (x, y - .5 - .25),
+              (x, ynext + .5 + .25),
+              mark: (end: "stealth"),
+              name: "l",
+            )
+            content(("l.start", 50%, "l.end"), anchor: "east", padding: .25)[L]
+            line(
+              (x, y - .5 - .25),
+              (xrightchild, ynext + .5 + .25),
+              mark: (end: "stealth"),
+              name: "l",
+            )
+            content(
+              ("l.start", 50%, "l.end"),
+              anchor: "west",
+              padding: (height - 1 - i) * .25,
+            )[R]
+          }
         }
-        content((x,y), $h_#nums.map(x => $#x$).join()$)
       }
-      if i != height - 1 {
-      line((x+.5, y), (xnext - 1, y))
-        line((x, y - .5 - .25), (x, ynext + .5 + .25), mark: (end: "stealth"), name: "l")
-        content(("l.start", 50%, "l.end"), anchor: "east", padding: .25)[L]
-        line((x, y - .5 - .25), (xrightchild, ynext + .5 + .25), mark: (end: "stealth"), name: "l")
-        content(("l.start", 50%, "l.end"), anchor: "west", padding: (height - 1 - i) * .25)[R]
-      }
-    }
-  }
-})
-),
-caption: [A hash key derivation tree from $t=0$ to $t=7$]
+    }),
+  ),
+  caption: [A hash key derivation tree from $t=0$ to $t=7$],
 ) <hash-key-derivation-tree>
 
 To send the keys to the decoder, they are compressed into a subscription file. The compression is done by finding the largest power of two intervals which span the entire interval of timestamps $t in ["start", "end"]$. For example, all keys in $[1, 5]$ can be derived by $h_001 => { k_1 }$, $h_01 => { k_2, k_3 }$, and $h_10 => { k_4, k_5 }$, so only $h_001$, $h_01$, and $h_10$ are needed to form a subscription. The worst case interval is $[1, 2^64-2]$ which requires $126$ subtree roots.
@@ -225,15 +245,20 @@ To send the keys to the decoder, they are compressed into a subscription file. T
 
 == Subscription <subscription>
 
-#align(center, table(
-  columns: 3,
-  align: left,
-  table.header([Field Name], [Size], [Relative Size]),
-  [Channel ID], [1 byte], bytesize(1),
-  [Start Timestamp], [8 bytes], bytesize(8),
-  [End Timestamp], [8 bytes], bytesize(8),
-  [Packed Subtree Root Hashes], ${16n "bytes" | n in NN, 1 <= n <= 126 }$, box(box(bytesize(16)) + " " + box($...n "times"$)),
-))
+#align(
+  center,
+  table(
+    columns: 3,
+    align: left,
+    table.header([Field Name], [Size], [Relative Size]),
+    [Channel ID], [1 byte], bytesize(1),
+    [Start Timestamp], [8 bytes], bytesize(8),
+    [End Timestamp], [8 bytes], bytesize(8),
+    [Packed Subtree Root Hashes],
+    ${16n "bytes" | n in NN, 1 <= n <= 126 }$,
+    box(box(bytesize(16)) + " " + box($...n "times"$)),
+  ),
+)
 
 The decoder runs the same algorithm using the start and end timestamps as the encoder to figure out where the subtree root hashes are, so no extra metadata is required to positions the hashes, or to know how many there are.
 
@@ -335,10 +360,10 @@ We will show that the following algorithm correctly produces the optimal set of 
   columns: 2,
   align: (right, left),
   gutter: 0.5em,
-  ..it.lines
-    .enumerate()
-    .map(((i, line)) => (style-number(i + 1), line))
-    .flatten()
+  ..it.lines.enumerate().map(((i, line)) => (
+    style-number(i + 1),
+    line,
+  )).flatten()
 )
 
 ```py

@@ -1,6 +1,6 @@
 # OSU Satellite TV for MITRE eCTF 2025
 
-[![Zig 0.13.0](https://img.shields.io/badge/Zig-0.13.0-f7a41d?logo=zig)](https://ziglang.org) [![Zig](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/zig.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/zig.yaml) [![eCTF](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/ectf.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/ectf.yaml)
+[![Zig 0.13.0](https://img.shields.io/badge/Zig-0.13.0-f7a41d?logo=zig)](https://ziglang.org) [![Zig](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/zig.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/zig.yaml) [![eCTF](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/ectf.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/ectf.yaml) [![Documentation](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/documentation.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/documentation.yaml)
 
 This repo contains all the code and documentation for team `scriptohio` from The Ohio State University in [MITRE's eCTF 2025](https://rules.ectf.mitre.org/2025/index.html).
 

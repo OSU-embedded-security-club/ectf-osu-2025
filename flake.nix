@@ -38,6 +38,7 @@
             toolsPackage
             designPackage
             typst
+            typstyle
             zig
             go-task
             zls
