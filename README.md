@@ -48,7 +48,7 @@ A [Taskfile](https://taskfile.dev) is available to easily run common tasks
 * bench-decoder: Benchmark the decoder
 * bench-encoder: Benchmark the encoder
 * bench-subscription: Benchmark creating a subscription on the decoder
-* docs: Watch documentation design file and compile to PDF
+* docs: Build documentation design file into PDF and SVG artifacts
 * shell: Spawn a shell in the docker container
 * stress-decoder: Use MITRE's stress test to benchmark the decoder
 * stress-encoder: Use MITRE's stress test to benchmark the encoder
@@ -70,6 +70,17 @@ task 2-build-firmware 3-flash
 
 [![Typst 0.12.0](https://img.shields.io/badge/Typst-0.12.0-239dad?logo=typst)](https://typst.app/home)
 
-The design document is available to read as a PDF here:
+The design document is available to read [as a PDF](docs/design.pdf), or inline below:
 
-- [Design PDF](docs/design.pdf)
+<details>
+  <summary>View the PDF inline</summary>
+  <img src="docs/pages/page-1.svg">
+  <img src="docs/pages/page-2.svg">
+  <img src="docs/pages/page-3.svg">
+  <img src="docs/pages/page-4.svg">
+  <img src="docs/pages/page-5.svg">
+  <img src="docs/pages/page-6.svg">
+  <img src="docs/pages/page-7.svg">
+  <img src="docs/pages/page-8.svg">
+  <img src="docs/pages/page-9.svg">
+</details>

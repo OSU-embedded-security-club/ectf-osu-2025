@@ -14,9 +14,11 @@ tasks:
       - '[ "$(stat -c %a {{.PORT}})" != "777" ] && sudo chmod 777 {{.PORT}} || true'
 
   docs:
-    desc: Watch documentation design file and compile to PDF
+    desc: Build documentation design file into PDF and SVG artifacts
+    dir: docs
     cmds:
-      - typst watch docs/design.typ
+      - typst compile design.typ
+      - typst compile design.typ pages/page-{p}.svg
 
   1-gen-secrets:
     desc: Generate secrets
