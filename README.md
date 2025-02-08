@@ -1,27 +1,70 @@
 # OSU Satellite TV for MITRE eCTF 2025
 
-[![Zig version 0.13.0](https://img.shields.io/badge/Zig-0.13.0-f7a41d?logo=zig)](https://ziglang.org) [![Zig](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/zig.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/zig.yaml) [![eCTF](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/ectf.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/ectf.yaml)
+[![Zig 0.13.0](https://img.shields.io/badge/Zig-0.13.0-f7a41d?logo=zig)](https://ziglang.org) [![Zig](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/zig.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/zig.yaml) [![eCTF](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/ectf.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/ectf.yaml)
 
 This repo contains all the code and documentation for team `scriptohio` from The Ohio State University in [MITRE's eCTF 2025](https://rules.ectf.mitre.org/2025/index.html).
 
 Highlights of our design:
 
-- 🔑 **Strong cryptography**
-    - 🌲 Our _binary hash key derivation tree_ efficiently compresses unique keys per timestamp to create a subscription over a time interval 🕐
-    - 💃 The [Salsa20](https://en.wikipedia.org/wiki/Salsa20) post-quantum stream cipher is used for lightning quick symmetric encryption and decryption
-    - 📝 All frames are signed and verified with [Ed25519](https://en.wikipedia.org/wiki/EdDSA#Ed25519) to ensure decoders only read frames from the encoder they came from
+- 🔐 **Strong cryptography**
+  - 🌲 Our _binary hash key derivation tree_ efficiently compresses unique keys per timestamp to create a subscription over a time interval 🕐
+  - 💃 The [Salsa20](https://en.wikipedia.org/wiki/Salsa20) post-quantum stream cipher is used for lightning quick symmetric encryption and decryption
+  - 📝 All frames are signed and verified with [Ed25519](https://en.wikipedia.org/wiki/EdDSA#Ed25519) to ensure decoders only read frames from the encoder they came from
 - ⚡ **Written in Zig**
-    - 📦 Expansive standard library which includes everything a programmer might need, from string manipulation to secure cryptography
-    - 🧪 Unit tests built in, allowing for critical sections to have their correctness verified
-    - 🚫 Memory safety protections against common issues like indexing out of bounds, double free, integer overflows, and more
-    - 🚧 Build system with incredible interoperability with C code. We still use the MSDK, and no HAL rewrites in sight 👀
+  - 📦 Expansive standard library which includes everything a programmer might need, from string manipulation to secure cryptography
+  - 🧪 Unit testing framework built in, allowing for critical sections to have their correctness verified
+  - 🚫 Memory safety protections against common issues like indexing out of bounds, double free, integer overflows, and more
+  - 🚧 Build system with incredible interoperability with C code. We still use the MSDK, and there are no HAL rewrites in sight 👀
 
 ## Layout 🌎
 
-- `decoder` - Firmware for the decoder
-- `design` - Host design including encoder
-- `docs` - Documentation on the system design and how it protects
-- `tools` - MITRE provided Host tools to interact with the decoder (Not modified)
+| Icon | Description                                                |
+| ---- | ---------------------------------------------------------- |
+| 👥   | Created by our team                                        |
+| 👔   | Created by MITRE for the competition, and unmodified by us |
+
+- 👥 `benches/` - Custom benchmarks to test the speed of the design 🐍
+- 👥 `decoder/` - Firmware for the decoder ⚡
+- 👥 `design/` - Host design including encoder 🐍
+- 👥 `docs/` - Documentation on the system design and security 📖
+- 👔 `tools/` - Host tools to interact with the decoder 🐍
+- 👥 `Taskfile.yml` - Command runner definitions 📄
+- 👥 `flake.nix` - Convenient [Nix](https://nixos.org) development environment ❄️
+
+## Usage
+
+A [Taskfile](https://taskfile.dev) is available to easily run common tasks
+
+```
+* 1-gen-secrets: Generate secrets
+* 2-build-firmware: Build the firmware image
+* 3-flash: Flash the built firmware image onto the Decoder
+* 4-gen-subscription: Generate a subscription
+* 5-subscribe: Take a subscription file and send it to the Decoder
+* 6-list: Asks the Decoder to list the subscriptions that it currently has
+* 7-uplink: Encodes sample frames with the custom encoder function and sends them to the satellite
+* 8-satellite: Broadcasts all frames received from the uplink to all listening TVs on the host computer
+* 9-tv: Receives encoded frames from the satellite and decodes with a Decoder connected to the host computer
+* bench-decoder: Benchmark the decoder
+* bench-encoder: Benchmark the encoder
+* bench-subscription: Benchmark creating a subscription on the decoder
+* docs: Watch documentation design file and compile to PDF
+* shell: Spawn a shell in the docker container
+* stress-decoder: Use MITRE's stress test to benchmark the decoder
+* stress-encoder: Use MITRE's stress test to benchmark the encoder
+```
+
+On a clean repo, plug in the MAX78000, enter firmware writing mode (the LED should be flashing blue), and run the following command:
+
+```
+task 1-gen-secrets 2-build-firmware 3-flash 4-gen-subscription 5-subscribe 6-list
+```
+
+Then, iterating on the design is typically done with the following command:
+
+```
+task 2-build-firmware 3-flash
+```
 
 ## Documentation 📖
 
