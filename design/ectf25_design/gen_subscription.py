@@ -79,7 +79,6 @@ def ctz(x: int) -> int:
     return ((x & -x) - 1).bit_count()
 
 
-
 def get_roots(a: int, b: int) -> list[Root]:
     if a > b:
         raise ValueError("Invalid range: a > b")
@@ -87,15 +86,9 @@ def get_roots(a: int, b: int) -> list[Root]:
     ranges = []
 
     while a <= b:
-        power = 1
-        while (a + (1 << power) - 1) <= b and power <= ctz(a):
-            power += 1
-        power -= 1
-
-        end = a + (1 << power) - 1
+        power = min((b - a + 1).bit_length() - 1, ctz(a))
         ranges.append(Root(power=power, offset=a))
-
-        a = end + 1
+        a += 1 << power
 
     return ranges
 

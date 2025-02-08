@@ -344,23 +344,17 @@ We will show that the following algorithm correctly produces the optimal set of 
 ```py
 class Node:
     offset: int
-    length: int
+    power: int
 
 def get_nodes(a: int, b: int) -> list[Node]:
     nodes = []
 
     while a <= b:
-        power = 1
-        while (a + (1 << power) - 1) <= b and power <= ctz(a):
-            power += 1
-        power -= 1
+        power = min((b - a + 1).bit_length() - 1, ctz(a))
+        ranges.append(Node(offset=a, power=power))
+        a += 1 << power
 
-        end = a + (1 << power) - 1
-        nodes.append(Node(length=2**power, offset=a))
-
-        a = end + 1
-
-    return nodes
+    return ranges
 ```
 
 === Correctness
