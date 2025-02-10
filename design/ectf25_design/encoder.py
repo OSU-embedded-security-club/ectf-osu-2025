@@ -24,7 +24,7 @@ RIGHT_SALT = b"R"
 
 
 def hash(data: bytes):
-    return blake3(data).digest(length=16)
+    return blake3(data).digest(length=24)
 
 
 class Encoder:
@@ -74,7 +74,7 @@ class Encoder:
                 else:
                     curr = hash(curr + RIGHT_SALT)
 
-            encrypted_frame = Salsa20.new(key=curr+curr, nonce=bytes([0 for _ in range(8)])).encrypt(frame)
+            encrypted_frame = Salsa20.new(key=curr+curr[:8], nonce=bytes([0 for _ in range(8)])).encrypt(frame)
 
             message = struct.pack("<IQ", channel, timestamp) + encrypted_frame
 

@@ -261,8 +261,8 @@ This aspect of the design secures the system in the following ways:
       [Start Timestamp], [8 bytes], bytesize(8),
       [End Timestamp], [8 bytes], bytesize(8),
       [Packed Subtree Root Hashes],
-      ${16n "bytes" | n in NN, 1 <= n <= 126 }$,
-      box(box(bytesize(16)) + " " + box($...n "times"$)),
+      ${24n "bytes" | n in NN^+, n <= 126 }$,
+      box(box(bytesize(24)) + " " + box($...n "times"$)),
     ),
   ),
   caption: [Structure of a subscribe packet],
@@ -420,7 +420,7 @@ def get_nodes(a: int, b: int) -> list[Node]:
     while a <= b:
         power = min((b - a + 1).bit_length() - 1, ctz(a))
         ranges.append(Node(offset=a, power=power))
-        a += 1 << power
+        a += 2 ** power
 
     return ranges
 ```
