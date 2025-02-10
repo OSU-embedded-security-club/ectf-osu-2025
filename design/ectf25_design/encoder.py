@@ -79,7 +79,7 @@ class Encoder:
             message = struct.pack("<IQ", channel, timestamp) + encrypted_frame
 
         signature = self.signer.sign(message)
-        return message + signature
+        return signature + message
 
 
 def main():

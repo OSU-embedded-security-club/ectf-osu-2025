@@ -9,20 +9,20 @@ const messaging = @import("messaging.zig");
 pub const max_message_size = @sizeOf(@TypeOf(std.mem.zeroes(Decode).message));
 
 const Decode = extern struct {
+    signature: [64]u8 align(1),
     channel: u32 align(1),
     timestamp: u64 align(1),
     message: [64]u8 align(1),
-    signature: [64]u8 align(1),
 };
 
 pub fn execute(body: []u8) !void {
-    if (body.len != @sizeOf(Decode)) {
+    if (body.len <= @offsetOf(Decode, "message") and body.len >= @sizeOf(Decode)) {
         messaging.sendDebug("BAD LENGTH FOR DECODE: {}", .{body.len});
         return error.BadLength;
     }
     const dec: *Decode = @ptrCast(body.ptr);
 
-    const message = body[0..@offsetOf(Decode, "signature")];
+    const message = body[@offsetOf(Decode, "channel")..];
     const valid = ed25519.ed25519_verify(&dec.signature, message.ptr, message.len, &secrets.public_key);
     if (valid == 0) {
         messaging.sendDebug("Invalid signature", .{});
@@ -47,5 +47,5 @@ pub fn execute(body: []u8) !void {
         lib.crypto.decrypt(&dec.message, key);
     }
 
-    try messaging.sendWithAcks('D', &dec.message);
+    try messaging.sendWithAcks('D', dec.message[0 .. body.len - @offsetOf(Decode, "message")]);
 }
