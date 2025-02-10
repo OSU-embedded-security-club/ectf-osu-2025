@@ -83,4 +83,5 @@ The design document is available to read [as a PDF](docs/design.pdf), or inline 
   <img src="docs/pages/page-7.svg">
   <img src="docs/pages/page-8.svg">
   <img src="docs/pages/page-9.svg">
+  <img src="docs/pages/page-10.svg">
 </details>
