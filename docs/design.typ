@@ -311,56 +311,84 @@ The #link("https://ziglang.org", [Zig programming language]) was selected as the
 
 A _node_ is a tuple $(o, l)$ where $l$ is a power of 2 and $o$ is a multiple of $l$.
 A node $(o, l)$ _contains_ a timestamp $x$ if $x in [o, o+l - 1]$.
-To say that an interval $I$ can be _encoded by_ $n$ nodes is to say that $union.big_i^n [o_i, o_i + l_i - 1]=I$.
-A _tree_ is a set of nodes.
+A _tree_ is a finite set of nodes.
+To say that an interval $I$ can be _encoded by_ a tree $T$ is to say that $union.big_((o, l) in T) [o, o+ l - 1]=I$.
 
 // Two intervals, $I_1=[o_1, o_1 + l_1 - 1]$, and $I_2 = [o_2, o_2 + l_2 - 1]$ are _analogous_ if $l_1=l_2$ and $o_1 mod l_1 = o_2 mod l_2$.
 
 === Lemma 1 <lemma1>
 
-Any interval on $[0, 2^n-1]$ where $n in NN, n >= 1$ and starting at $0$ can be encoded with at most $n$ nodes.
+For all $n >= 1$, any interval $[0, k]$, where $k <= 2^n-1$, can be encoded by a tree containing at most $n$ nodes.
 
-, $n=1$:
+*Base case*, $n=1$:
 
-Let $I$ be an interval on $[0, 2^1 - 1] = [0,1]$ starting at $0$. For $I=[0, 0]$, this can be covered by a $1$ length node at offset 0. For $I=[0, 1]$, this can be covered by a $2$ length node at offset 0.
+We want to show that any interval $[0, k]$ where $k <= 2^1 - 1 = 1$ can be encoded by at most 1 node.
 
-*Induction Hypothesis:* Any interval on $[0, 2^n - 1]$ and starting at $0$ can be encoded with at most $n$ nodes.
+- ${(0, 1)}$ encodes $[0, 0]$
+- ${(0, 2)}$ encodes $[0, 1]$
 
-We wish to show that any interval on $[0, 2^(n+1)-1]$ and starting at $0$ can be encoded with at most $n+1$ nodes.
+*Induction hypothesis:* Suppose any interval $[0, k]$ where $k <= 2^n-1$ can be encoded by a tree with at most $n$ nodes.
 
-Let $I$ be an interval in $[0, 2^(n+1)-1]$ starting at $0$, i.e. $I=[0, k]$ where $k<2^(n+1)$.
+We wish to show that any interval on $[0, b]$ where $b <= 2^(n+1)-1$ can be encoded by a tree with at most $n+1$ nodes.
 
-*Case 1:* $k < 2^n$: By the induction hypothesis, $I$ can be covered by $n<=n+1$ nodes.
+Let $I = [0, b]$ where $b <= 2^(n+1)-1$.
 
-*Case 2:* $k >= 2^n$: Then $I = [0, 2^n - 1] union [2^n, k]$. The interval $[0, 2^n - 1]$ can be covered by $1$ node, because it is half of the total interval. $[2^n, k]$ is analogous to $[0, k - 2^n - 1]$, which is an interval on $[0, 2^n-1]$. By the induction hypothesis, $[0, k - 2^n - 1]$ can be covered by at most $n$ nodes. Therefore, $[2^n, k]$ can be covered by at most $n$ nodes. Therefore, $I$ can be covered by at most $n+1$ nodes.
+*Case 1:* $b < 2^n$: By the induction hypothesis, $I$ can be encoded with a tree with at most $n <= n + 1$ nodes.
+
+*Case 2:* $2^n <= b < 2^(n+1)$: Then $I = [0, 2^n - 1] union [2^n, b]$.
+
+The first interval, $[0, 2^n - 1]$ can be encoded by $1$ node, namely, $(0, 2^n)$.
+
+Since $b-2^n < 2^n$, we can shift the second interval $[2^n, b]$ to the left by $2^n$, obtaining the interval $[0, b - 2^n]$, which by the induction hypothesis can be encoded by a tree $T$ containing at most $n$ nodes.
+
+Shifting that tree back to the right, we obtain $T' = {(o + 2^n, l) | (o, l) in T}$ which encodes $[2^n, b]$. $T'$ has the same number of nodes as $T$, so $T'$ has at most $n$ nodes.
+
+Therefore, $I$ is encoded by ${(0, 2^n)} union T'$, which contains at most $n+1$ nodes.
 
 === Lemma 2 <lemma2>
 
-Any interval $[k, 2^n-1]$ where $n in NN, n >= 1$ and starting at $k$ can be encoded with at most $n$ nodes.
+For all $n >= 1$, any interval $[k, 2^n-1]$ can be encoded with at most $n$ nodes.
 
-This follows from Lemma 1. Let $T$ be the tree which by Lemma 1 covers $[0, 2^n-1-k]$. Then let $T'$ be $T$, but with each node $(o,l)$ replaced by $(2^n-l-o,l)$.
+Let $T$ be the tree which by Lemma 1 encodes $[0, 2^n-1-k]$ and contains at most $n$ nodes.
+Then let $T' = {(2^n-l-o,l) | (o, l) in T}$, which also contains at most $n$ nodes.
+Intuitively, this is the tree $T$ flipped horizontally.
 
-We will show that $T'$ covers $[k, 2^n-1]$ by considering an arbitrary timestamp $x in [k, 2^n]$. $2^n-1-x$ is within the interval $[0,k]$, so there exists a node $(o, l)$ which contains $2^n-1-x$, that is, $o <= 2^n-1-x <= o + l$. Therefore, $2^n - 1 - l - o <= x <= (2^n - 1 - l - o) + l$, so the node in $T'$, $(2^n-l-o,l)$, contains $x$.
+We will show that $T'$ encodes $[k, 2^n-1]$ by considering an arbitrary timestamp $x in [k, 2^n - 1]$. \
+$2^n-1-x$ is within the interval $[0,k]$, so there exists a node $(o, l) in T$ which contains $2^n-1-x$, that is, $o <= 2^n-1-x <= o + l$.
+Therefore, $2^n - 1 - l - o <= x <= (2^n - 1 - l - o) + l$, so the corresponding node in $T'$, $(2^n-l-o,l)$, contains $x$.
 
 === Theorem <theorem>
 
-Any interval on $[0, 2^n - 1]$ where $n in NN, n >= 2$ can be covered by at most $2n-2$ nodes.
+For all $n >= 2$, any interval on $[0, 2^n - 1]$ can be encoded by at most $2n-2$ nodes.
 
-Base Case, $n=2$:
+*Base case*, $n=2$:
 
-Let $I$ be an interval on $[0, 2^2-1]=[0,3]$.
+We want to show that all intervals on $[0, 3]$ can be encoded by at most $2$ nodes.
 
-Induction Hypothesis: Any interval on $[0, 2^n - 1]$ where $n in NN, n >= 2$ can be covered by at most $2n-2$ nodes.
+- ${(x, 1)}$ encodes $[x, x]$ for $x in [0, 3]$
+- ${(0, 2)}$ encodes $[0, 1]$
+- ${(0, 2), (2, 1)}$ encodes $[0, 2]$
+- ${(0, 4)}$ encodes $[0, 3]$
+- ${(1, 1), (2, 1)}$ encodes $[1, 2]$
+- ${(1, 1), (2, 2)}$ encodes $[1, 3]$
+- ${(2, 1), (3, 1)}$ encodes $[2, 3]$
 
-We wish to show that any interval on $[0, 2^(n+1)-1]$ where $n in NN, n+1 >= 2 => n>=1$ can be covered by at most $2(n+1)-1=2n$ nodes.
+*Induction hypothesis*: Suppose any interval on $[0, 2^n - 1]$ can be encoded by at most \ $2n-2$ nodes.
 
-Let $I$ be an interval on $[0, 2^(n+1) -1]$.
+We wish to show that any interval on $[0, 2^(n+1)-1]$ can be encoded by at most $2(n+1)-2=2n$ nodes.
 
-Case 1: $I subset [0, 2^n - 1]$. Intuitively, this is within the left half of the interval. By the induction hypothesis, $I$ can be covered by $2n-2 <= 2n$ nodes.
+Let $I = [a, b]$ be a interval on $[0, 2^(n+1) -1]$.
 
-Case 2: $I subset [2^n, 2^(n+1)-1]$. Intuitively, this is within the right half of the interval. The interval $[2^n, 2^(n+1)-1]$ is analogous to the interval $[0, 2^n - 1]$. By the induction hypothesis, $[0, 2^n - 1]$ can be covered by $2n-2$ nodes. Therefore, $I$ can be covered by $2n-2 <= 2n$ nodes.
+*Case 1*: $a <= b < 2^n$. Intuitively, this means the range is within the left half of the tree. By the induction hypothesis, $I$ can be encoded by $2n-2 <= 2n$ nodes.
 
-Case 3: $k < 2^n < l$. Intuitively, this means the interval crosses the middle boundary. Then, $I=[k, 2^n - 1] union [2^n, l]$. By @lemma2[Lemma 2:], $[k, 2^n - 1]$ can be covered by at most $n$ nodes. Similarly, $[2^n, l]$ is analogous to $[0, l-2^n]$, which, by @lemma1[Lemma 1:], can be covered by at most $n$ nodes. Therefore, $I$ can be covered by $n+n=2n$ nodes.
+*Case 2*: $2^n <= a <= b$. Intuitively, this means the range is within the right half of the tree.
+\ The interval $[a - 2^n, b-2^n]$ is a subinterval of $[0, 2^n-1]$, so by the induction hypothesis, there is a tree $T$ containing at most $2n-2$ nodes which encodes $[a - 2^n, b-2^n]$.
+Thus, the tree \ $T' = {(o+2^n, l) | (o,l) in T}$, also containing at most $2n-2$ nodes, encodes $[a, b]$.
+
+*Case 3*: $a < 2^n <= b$. Intuitively, this means the interval crosses the center of the tree. \ So $I=[a, 2^n - 1] union [2^n, b]$.
+By @lemma2[Lemma 2:], $[a, 2^n - 1]$ can be encoded by a tree $T$ containing most $n$ nodes.
+Similarly, by @lemma1[Lemma 1:], $[0, b-2^n]$ can be encoded by can be encoded by a tree $S$ containing at most $n$ nodes, so $S' = {(o + 2^n, l) | (o, l) in S}$ encodes $[2^n, b]$.
+Therefore, $I$ can be encoded by $T union S'$, which contains at most $n + n = 2n$ nodes.
 
 === Application
 
