@@ -25,7 +25,7 @@ RIGHT_SALT = b"R"
 
 
 def hash(data: bytes):
-    return blake3(data).digest(length=16)
+    return blake3(data).digest(length=24)
 
 
 @dataclass(frozen=True)
@@ -62,11 +62,9 @@ def gen_subscription(
                 curr = hash(curr + LEFT_SALT)
             else:
                 curr = hash(curr + RIGHT_SALT)
-        print(root, curr.hex())
         hashes.append(curr)
 
     subscription_salt = bytes.fromhex(secrets["subscription_salt"])
-    print(f"{subscription_salt.hex()}{device_id:08x}")
     key = blake3(f"{subscription_salt.hex()}{device_id:08x}".encode()).digest()
 
     # Pack the subscription. This will be sent to the decoder with ectf25.tv.subscribe

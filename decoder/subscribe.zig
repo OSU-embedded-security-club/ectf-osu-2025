@@ -21,6 +21,7 @@ pub fn execute(body: []u8) !void {
     const header: *const SubscribeHeader = @ptrCast(body.ptr);
     const channel_index = header.channel - 1;
 
+    if (root.subscriptions[channel_index]) |*subscription| subscription.deinit();
     root.subscriptions[channel_index] = lib.Subscription.init(header.start, header.end, body[@sizeOf(SubscribeHeader)..]);
 
     try flash.saveSubscriptions(@truncate(channel_index));

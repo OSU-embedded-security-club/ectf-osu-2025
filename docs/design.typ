@@ -255,8 +255,8 @@ To send the keys to the decoder, they are compressed into a subscription file. T
     [Start Timestamp], [8 bytes], bytesize(8),
     [End Timestamp], [8 bytes], bytesize(8),
     [Packed Subtree Root Hashes],
-    ${16n "bytes" | n in NN, 1 <= n <= 126 }$,
-    box(box(bytesize(16)) + " " + box($...n "times"$)),
+    ${24n "bytes" | n in NN^+ and n <= 126 }$,
+    box(box(bytesize(24)) + " " + box($...n "times"$)),
   ),
 )
 
@@ -377,7 +377,7 @@ def get_nodes(a: int, b: int) -> list[Node]:
     while a <= b:
         power = min((b - a + 1).bit_length() - 1, ctz(a))
         ranges.append(Node(offset=a, power=power))
-        a += 1 << power
+        a += 2 ** power
 
     return ranges
 ```

@@ -18,6 +18,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .name = "main",
         .optimize = .ReleaseSafe,
+        .link_libc = true,
     });
 
     const unit_tests = b.addTest(.{
