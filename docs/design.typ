@@ -159,20 +159,23 @@ The firmware must be built for each separate decoder device. When building, spec
 
 #let bytesize(bytes) = rect(width: 4pt * bytes, height: 5pt, fill: navy)
 
-#align(
-  center,
-  table(
-    columns: 3,
-    align: left,
-    table.header([Field Name], [Size], [Relative Size]),
-    [Channel ID], [1 byte], bytesize(1),
-    [Timestamp], [8 bytes], bytesize(8),
-    [Message], [64 bytes], bytesize(64),
-    [Signature], [64 bytes], bytesize(64),
+#figure(
+  align(
+    center,
+    table(
+      columns: 3,
+      align: left,
+      table.header([Field Name], [Size], [Relative Size]),
+      [Channel ID], [1 byte], bytesize(1),
+      [Timestamp], [8 bytes], bytesize(8),
+      [Message], [64 bytes], bytesize(64),
+      [Signature], [64 bytes], bytesize(64),
+    ),
   ),
+  caption: [Structure of a decode packet],
 )
 
-Each frame has an integer timestamp $t in [0, 2^64 - 1]$. Each timestamp has a unique symmetric key $k_t$ which the encoder will use to encrypt the message, and the decoder will use to decrypt the message, both using Salsa20. The keys are derived with a _binary hash key derivation tree_. Let $H$ be a cryptographic hash function. We have chosen $H="blake3"$. Let $L$ and $R$ be salted hash functions $L(x)=H(x + \""left"\")$ and $R(x)=H(x+\""right"\")$. The encoder uses secret $S_"channel_id"$ for the channel id currently being broadcasted, and generates a root hash $h=H(S)$. Then, two hashes $h_0=L(h)$ and $h_1=L(h)$ are derived. Then $h_00=L(h_0)$, $h_01=R(h_0)$, $h_10=L(h_1)$, and $h_11=R(h_1)$, and so on. This process continues to form a tree of height $64$. The leaves of the tree form the keys $k_t$, one for every timestamp. @hash-key-derivation-tree shows a hash key derivation tree for $t in [0, 7]$ and has $8$ leaves. Note that the full sized tree has $2^64$ leaves, the leaves are computed on demand for particular timestamps since it would be computationally infeasible to precompute all keys for such a large tree.
+Each frame has an integer timestamp $t in [0, 2^64 - 1]$. Each timestamp has a unique symmetric key $k_t$ which the encoder will use to encrypt the message, and the decoder will use to decrypt the message, both using Salsa20. The keys are derived with a _binary hash key derivation tree_. Let $H$ be a cryptographic hash function. We have chosen $H="blake3"$. Let $L$ and $R$ be salted hash functions $L(x)=H(x + #quote(math.upright("L")))$ and $R(x)=H(x+#quote(math.upright("R")))$. The encoder uses secret $S_"channel_id"$ for the channel id currently being broadcasted, and generates a root hash $h=H(S)$. Then, two hashes $h_0=L(h)$ and $h_1=R(h)$ are derived. Then $h_00=L(h_0)$, $h_01=R(h_0)$, $h_10=L(h_1)$, and $h_11=R(h_1)$, and so on. This process continues to form a tree of height $64$. The leaves of the tree form the keys $k_t$, one for every timestamp. @hash-key-derivation-tree shows a hash key derivation tree for $t in [0, 7]$ and has $8$ leaves. Note that the full sized tree has $2^64$ leaves, the leaves are computed on demand for particular timestamps since it would be computationally infeasible to precompute all keys for such a large tree.
 
 #figure(
   align(
@@ -232,7 +235,9 @@ Each frame has an integer timestamp $t in [0, 2^64 - 1]$. Each timestamp has a u
   caption: [A hash key derivation tree from $t=0$ to $t=7$],
 ) <hash-key-derivation-tree>
 
-To send the keys to the decoder, they are compressed into a subscription file. The compression is done by finding the largest power of two intervals which span the entire interval of timestamps $t in ["start", "end"]$. For example, all keys in $[1, 5]$ can be derived by $h_001 => { k_1 }$, $h_01 => { k_2, k_3 }$, and $h_10 => { k_4, k_5 }$, so only $h_001$, $h_01$, and $h_10$ are needed to form a subscription. The worst case interval is $[1, 2^64-2]$ which requires $126$ subtree roots.
+To send the keys to the decoder, they are compressed into a subscription file. The compression is done by finding the largest power of two intervals which span the entire interval of timestamps \ $t in ["start", "end"]$. For example, all keys in $[1, 5]$ can be derived by $h_001 => { k_1 }$, $h_01 => { k_2, k_3 }$, and $h_10 => { k_4, k_5 }$, so only $h_001$, $h_01$, and $h_10$ are needed to form a subscription. The worst case interval is $[1, 2^64-2]$ which requires $126$ subtree roots.
+
+This aspect of the design secures the system in the following ways:
 
 - @sr1[Active Subscription]
   - The decoder is never given more keys than exactly those which correspond to the timestamps in the subscription it was given. This means it is cryptographically impossible to decrypt frames outside of the subscription interval.
@@ -245,19 +250,22 @@ To send the keys to the decoder, they are compressed into a subscription file. T
 
 == Subscription <subscription>
 
-#align(
-  center,
-  table(
-    columns: 3,
-    align: left,
-    table.header([Field Name], [Size], [Relative Size]),
-    [Channel ID], [1 byte], bytesize(1),
-    [Start Timestamp], [8 bytes], bytesize(8),
-    [End Timestamp], [8 bytes], bytesize(8),
-    [Packed Subtree Root Hashes],
-    ${16n "bytes" | n in NN, 1 <= n <= 126 }$,
-    box(box(bytesize(16)) + " " + box($...n "times"$)),
+#figure(
+  align(
+    center,
+    table(
+      columns: 3,
+      align: left,
+      table.header([Field Name], [Size], [Relative Size]),
+      [Channel ID], [1 byte], bytesize(1),
+      [Start Timestamp], [8 bytes], bytesize(8),
+      [End Timestamp], [8 bytes], bytesize(8),
+      [Packed Subtree Root Hashes],
+      ${16n "bytes" | n in NN, 1 <= n <= 126 }$,
+      box(box(bytesize(16)) + " " + box($...n "times"$)),
+    ),
   ),
+  caption: [Structure of a subscribe packet],
 )
 
 The decoder runs the same algorithm using the start and end timestamps as the encoder to figure out where the subtree root hashes are, so no extra metadata is required to positions the hashes, or to know how many there are.
@@ -266,7 +274,7 @@ The decoder runs the same algorithm using the start and end timestamps as the en
 
 The entire subscription payload is symmetricly encrypted using Salsa20 with a key $#ksub =H(S + "DEVICE_ID")$. #ksub is stored within the decoder as a static variable in the `.rodata` section when it is provisioned and can be used to decrypt a subscription. This ensures that subscriptions can only be used by the decoder the subscription was generated for.
 
-This design ensures against the following:
+This aspect of the design secures the system in the following ways:
 
 - @as2[Pirated Subscription]
   - Encrypting the subscription file with #ksub means that an attacker needs physical access to the decoder which a subscription was generated for. In the Pirated Subscription scenario, the attacker is given a subscription file for a device id which they do not have, so it is not possible to extract the key and decrypt the subscription to apply it to the attacker's own decoder.
@@ -274,6 +282,8 @@ This design ensures against the following:
 == Signatures <signature>
 
 The encoder uses the secret key $S K$ to sign every message with a 64 byte Ed25519 signature. The public key $P K$ is stored within all decoders as a static variable in the `.rodata` section and verifies every message to ensure it came from the encoder it was provisioned with.
+
+This aspect of the design secures the system in the following ways:
 
 - @sr2[Authentication]
   - Using asymmetric cryptographic, the decoder can ensure that it only accepts messages from the encoder it was provisioned with. Additionally, it prevents a compromised decoder from sending messages to other decoders, unlike symmetric cryptography.
@@ -284,6 +294,8 @@ The encoder uses the secret key $S K$ to sign every message with a 64 byte Ed255
 
 A global timestamp is kept in the RAM of the decoder, and is used to reject misordered frames. It increases on every successful decode.
 
+This aspect of the design secures the system in the following ways:
+
 - @sr3[Increasing Timestamps]
   - The timestamp can be checked against the timestamp in the frame before attempting to decode the data in frame, ensuring that the decoder never decodes an earlier frame.
 
@@ -293,39 +305,42 @@ The #link("https://ziglang.org", [Zig programming language]) was selected as the
 
 = Appendix
 
-== Proof that there are no more than 126 nodes
+== Proof that any interval can be encoded with at most 126 nodes
 
 === Definitions
 
-For a given $n$, a _node_ has an offset $o$ where $o in NN$ and $0 <= o <= 2^n - 1$, and a length $l in {2^x | x in NN and 0 <= x <= n}$.
+A _node_ is a tuple $(o, l)$ where $l$ is a power of 2 and $o$ is a multiple of $l$.
+A node $(o, l)$ _contains_ a timestamp $x$ if $x in [o, o+l - 1]$.
+To say that an interval $I$ can be _encoded by_ $n$ nodes is to say that $union.big_i^n [o_i, o_i + l_i - 1]=I$.
+A _tree_ is a set of nodes.
 
-To say that an interval $I$ can be _encoded by_ $n$ nodes is to say that, $union.big_i^n [o_i, o_i + l_i - 1]=I$.
-
-Two intervals, $I_1=[o_1, o_1 + l_1 - 1]$, and $I_2 = [o_2, o_2 + l_2 - 1]$ are _analogous_ if $l_1=l_2$ and $o_1 mod l_1 = o_2 mod l_2$.
+// Two intervals, $I_1=[o_1, o_1 + l_1 - 1]$, and $I_2 = [o_2, o_2 + l_2 - 1]$ are _analogous_ if $l_1=l_2$ and $o_1 mod l_1 = o_2 mod l_2$.
 
 === Lemma 1 <lemma1>
 
 Any interval on $[0, 2^n-1]$ where $n in NN, n >= 1$ and starting at $0$ can be encoded with at most $n$ nodes.
 
-Base Case, $n=1$:
+, $n=1$:
 
 Let $I$ be an interval on $[0, 2^1 - 1] = [0,1]$ starting at $0$. For $I=[0, 0]$, this can be covered by a $1$ length node at offset 0. For $I=[0, 1]$, this can be covered by a $2$ length node at offset 0.
 
-Induction Hypothesis: Any interval on $[0, 2^n - 1]$ and starting at $0$ can be encoded with at most $n$ nodes.
+*Induction Hypothesis:* Any interval on $[0, 2^n - 1]$ and starting at $0$ can be encoded with at most $n$ nodes.
 
 We wish to show that any interval on $[0, 2^(n+1)-1]$ and starting at $0$ can be encoded with at most $n+1$ nodes.
 
 Let $I$ be an interval in $[0, 2^(n+1)-1]$ starting at $0$, i.e. $I=[0, k]$ where $k<2^(n+1)$.
 
-Case 1: $k < 2^n$: By the induction hypothesis, $I$ can be covered by $n<=n+1$ nodes.
+*Case 1:* $k < 2^n$: By the induction hypothesis, $I$ can be covered by $n<=n+1$ nodes.
 
-Case 2: $k >= 2^n$: Then $I = [0, 2^n - 1] union [2^n, k]$. The interval $[0, 2^n - 1]$ can be covered by $1$ node, because it is half of the total interval. $[2^n, k]$ is analogous to $[0, 2^n - 1]$. By the induction hypothesis, $[0, 2^n - 1]$ can be covered by at most $n$ nodes. Therefore, $[2^n, k]$ can be covered by at most $n$ nodes. Therefore, $I$ can be covered by at most $n+1$ nodes.
+*Case 2:* $k >= 2^n$: Then $I = [0, 2^n - 1] union [2^n, k]$. The interval $[0, 2^n - 1]$ can be covered by $1$ node, because it is half of the total interval. $[2^n, k]$ is analogous to $[0, k - 2^n - 1]$, which is an interval on $[0, 2^n-1]$. By the induction hypothesis, $[0, k - 2^n - 1]$ can be covered by at most $n$ nodes. Therefore, $[2^n, k]$ can be covered by at most $n$ nodes. Therefore, $I$ can be covered by at most $n+1$ nodes.
 
 === Lemma 2 <lemma2>
 
-Any interval on $[k, 2^n-1]$ where $n in NN, n >= 1$ and starting at $k$ can be encoded with at most $n$ nodes.
+Any interval $[k, 2^n-1]$ where $n in NN, n >= 1$ and starting at $k$ can be encoded with at most $n$ nodes.
 
-This follows from Lemma 1, because the interval $[k, 2^n-1]$ is analogous to $[0, 2^n - 1]$.
+This follows from Lemma 1. Let $T$ be the tree which by Lemma 1 covers $[0, 2^n-1-k]$. Then let $T'$ be $T$, but with each node $(o,l)$ replaced by $(2^n-l-o,l)$.
+
+We will show that $T'$ covers $[k, 2^n-1]$ by considering an arbitrary timestamp $x in [k, 2^n]$. $2^n-1-x$ is within the interval $[0,k]$, so there exists a node $(o, l)$ which contains $2^n-1-x$, that is, $o <= 2^n-1-x <= o + l$. Therefore, $2^n - 1 - l - o <= x <= (2^n - 1 - l - o) + l$, so the node in $T'$, $(2^n-l-o,l)$, contains $x$.
 
 === Theorem <theorem>
 
