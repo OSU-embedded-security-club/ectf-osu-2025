@@ -262,7 +262,7 @@ This aspect of the design secures the system in the following ways:
       [End Timestamp], [8 bytes], bytesize(8),
       [Packed Subtree Root Hashes],
       ${24n "bytes" | n in NN^+, n <= 126 }$,
-      box(box(bytesize(16)) + " " + box($...n "times"$)),
+      box(box(bytesize(24)) + " " + box($...n "times"$)),
     ),
   ),
   caption: [Structure of a subscribe packet],
