@@ -65,7 +65,7 @@ class Encoder:
         :returns: The encoded frame, which will be sent to the Decoder
         """
         if channel == 0:
-            message = struct.pack("<IQ", channel, timestamp) + frame
+            message = struct.pack("<HQ", channel, timestamp) + frame
         else:
             curr = self.seeds[channel]
             for i in range(HASH_TREE_HEIGHT, -1, -1):
@@ -76,7 +76,7 @@ class Encoder:
 
             encrypted_frame = Salsa20.new(key=curr+curr[:8], nonce=bytes([0 for _ in range(8)])).encrypt(frame)
 
-            message = struct.pack("<IQ", channel, timestamp) + encrypted_frame
+            message = struct.pack("<HQ", channel, timestamp) + encrypted_frame
 
         signature = self.signer.sign(message)
         return signature + message

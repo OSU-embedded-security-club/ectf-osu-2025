@@ -43,7 +43,12 @@ pub fn init() !void {
             messaging.sendDebug("Reading saved subscription {}", .{i});
             var subscription_bytes: lib.Subscription.Bytes = undefined;
             read(flash_start_address + (i * msdk.MXC_FLASH_PAGE_SIZE), &subscription_bytes);
-            root.subscriptions[i - 1] = lib.Subscription.init(subscription_bytes.start, subscription_bytes.end, std.mem.asBytes(&subscription_bytes.root_hashes));
+            root.subscriptions[i - 1] = lib.Subscription.init(
+                subscription_bytes.channel_id,
+                subscription_bytes.start,
+                subscription_bytes.end,
+                std.mem.asBytes(&subscription_bytes.root_hashes),
+            );
         }
     }
 }

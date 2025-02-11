@@ -1,6 +1,7 @@
 const std = @import("std");
 const msdk = @import("msdk");
 const lib = @import("lib");
+const secrets = @import("secrets");
 
 const flash = @import("flash.zig");
 const uart = @import("uart.zig");
@@ -10,6 +11,13 @@ const subscribe = @import("subscribe.zig");
 const decode = @import("decode.zig");
 
 pub var subscriptions = [8]?lib.Subscription{ null, null, null, null, null, null, null, null };
+
+pub fn getChannelIndex(channel_id: u16) !u3 {
+    inline for (secrets.channel_ids, 0..) |id, i| {
+        if (channel_id == id) return i;
+    }
+    return error.UNKNOWN;
+}
 
 const max_message_size = @max(list.max_message_size, subscribe.max_message_size, decode.max_message_size);
 var message_body_buffer: [max_message_size]u8 = undefined;

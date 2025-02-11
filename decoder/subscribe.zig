@@ -11,7 +11,7 @@ pub const max_message_size = @sizeOf(SubscribeHeader) + @sizeOf(lib.Subscription
 const SubscribeHeader = extern struct {
     start: u64 align(1),
     end: u64 align(1),
-    channel: u8 align(1),
+    channel_id: u16 align(1),
 };
 
 pub fn execute(body: []u8) !void {
@@ -19,10 +19,15 @@ pub fn execute(body: []u8) !void {
     std.crypto.stream.salsa.Salsa20.xor(body, body, 0, key, std.mem.zeroes([8]u8));
 
     const header: *const SubscribeHeader = @ptrCast(body.ptr);
-    const channel_index = header.channel - 1;
+    const channel_index = try root.getChannelIndex(header.channel_id);
 
     if (root.subscriptions[channel_index]) |*subscription| subscription.deinit();
-    root.subscriptions[channel_index] = lib.Subscription.init(header.start, header.end, body[@sizeOf(SubscribeHeader)..]);
+    root.subscriptions[channel_index] = lib.Subscription.init(
+        header.channel_id,
+        header.start,
+        header.end,
+        body[@sizeOf(SubscribeHeader)..],
+    );
 
     try flash.saveSubscriptions(@truncate(channel_index));
 

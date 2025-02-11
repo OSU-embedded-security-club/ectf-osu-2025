@@ -10,7 +10,7 @@ pub const max_message_size = @sizeOf(@TypeOf(std.mem.zeroes(Decode).message));
 
 const Decode = extern struct {
     signature: [64]u8 align(1),
-    channel: u32 align(1),
+    channel: u16 align(1),
     timestamp: u64 align(1),
     message: [64]u8 align(1),
 };
@@ -30,11 +30,12 @@ pub fn execute(body: []u8) !void {
     }
 
     if (dec.channel != 0) {
-        if (dec.channel - 1 >= root.subscriptions.len) {
+        const channel_index = try root.getChannelIndex(dec.channel);
+        if (channel_index >= root.subscriptions.len) {
             messaging.sendDebug("Channel too large", .{});
             return error.ChannelTooLarge;
         }
-        var subscription = &(root.subscriptions[dec.channel - 1] orelse {
+        var subscription = &(root.subscriptions[channel_index] orelse {
             messaging.sendDebug("No subscription", .{});
             return error.NoSubscription;
         });
