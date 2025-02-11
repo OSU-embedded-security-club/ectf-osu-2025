@@ -8,6 +8,8 @@ const messaging = @import("messaging.zig");
 
 pub const max_message_size = @sizeOf(@TypeOf(std.mem.zeroes(Decode).message));
 
+var last_timestamp: u64 = 0;
+
 const Decode = extern struct {
     signature: [64]u8 align(1),
     channel: u16 align(1),
@@ -17,32 +19,30 @@ const Decode = extern struct {
 
 pub fn execute(body: []u8) !void {
     if (body.len <= @offsetOf(Decode, "message") and body.len >= @sizeOf(Decode)) {
-        messaging.sendDebug("BAD LENGTH FOR DECODE: {}", .{body.len});
-        return error.BadLength;
+        return error.InvalidBody;
     }
     const dec: *Decode = @ptrCast(body.ptr);
 
     const message = body[@offsetOf(Decode, "channel")..];
     const valid = ed25519.ed25519_verify(&dec.signature, message.ptr, message.len, &secrets.public_key);
     if (valid == 0) {
-        messaging.sendDebug("Invalid signature", .{});
         return error.InvalidSignature;
     }
 
     if (dec.channel != 0) {
         const channel_index = try root.getChannelIndex(dec.channel);
-        if (channel_index >= root.subscriptions.len) {
-            messaging.sendDebug("Channel too large", .{});
-            return error.ChannelTooLarge;
-        }
         var subscription = &(root.subscriptions[channel_index] orelse {
-            messaging.sendDebug("No subscription", .{});
             return error.NoSubscription;
         });
         if (dec.timestamp < subscription.serialized.start or subscription.serialized.end < dec.timestamp) {
-            messaging.sendDebug("Not in subscription time range", .{});
             return error.NotInSubscriptionTimeRange;
         }
+
+        if (dec.timestamp <= last_timestamp) {
+            return error.DecreasingTimestamp;
+        }
+
+        last_timestamp = dec.timestamp;
 
         const key = subscription.getKey(dec.timestamp);
         lib.crypto.decrypt(&dec.message, key);

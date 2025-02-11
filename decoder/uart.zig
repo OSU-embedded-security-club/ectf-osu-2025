@@ -2,11 +2,11 @@ const std = @import("std");
 const msdk = @import("msdk");
 const lib = @import("lib");
 
-pub fn init() !void {
+pub fn init() lib.MSDKError!void {
     try lib.msdkTry(msdk.MXC_UART_Init(msdk.MXC_UART_GET_UART(msdk.CONSOLE_UART), msdk.CONSOLE_BAUD, msdk.MXC_UART_IBRO_CLK));
 }
 
-pub fn readByte() !u8 {
+pub fn readByte() lib.MSDKError!u8 {
     const data = msdk.MXC_UART_ReadCharacter(msdk.MXC_UART_GET_UART(msdk.CONSOLE_UART));
     if (data < 0) {
         try lib.msdkTry(data);

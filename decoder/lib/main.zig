@@ -30,7 +30,7 @@ const MXCError = enum(c_int) {
     E_FAIL = -255,
 };
 
-const MSDKError = error{
+pub const MSDKError = error{
     NO_ERROR,
     NULL_PTR,
     BAD_PARAM,

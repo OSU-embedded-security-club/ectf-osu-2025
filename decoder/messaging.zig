@@ -54,16 +54,28 @@ pub fn sendAck() void {
     uart.writeBytes(&packet.asBytes());
 }
 
-var debug_message_buffer: [256]u8 = undefined;
+var message_buffer: [256]u8 = undefined;
 
 pub fn sendDebug(comptime format: []const u8, args: anytype) void {
-    const text = std.fmt.bufPrint(debug_message_buffer[4..], format, args) catch @panic("Message too big");
+    const text = std.fmt.bufPrint(message_buffer[4..], format, args) catch @panic("Message too big");
 
     const len: u16 = @truncate(text.len);
-    debug_message_buffer[0] = '%';
-    debug_message_buffer[1] = 'G';
-    debug_message_buffer[2] = @truncate(len);
-    debug_message_buffer[3] = @truncate(len >> 8);
+    message_buffer[0] = '%';
+    message_buffer[1] = 'G';
+    message_buffer[2] = @truncate(len);
+    message_buffer[3] = @truncate(len >> 8);
 
-    uart.writeBytes(debug_message_buffer[0 .. len + 4]);
+    uart.writeBytes(message_buffer[0 .. len + 4]);
+}
+
+pub fn sendError(comptime format: []const u8, args: anytype) void {
+    const text = std.fmt.bufPrint(message_buffer[4..], format, args) catch @panic("Message too big");
+
+    const len: u16 = @truncate(text.len);
+    message_buffer[0] = '%';
+    message_buffer[1] = 'E';
+    message_buffer[2] = @truncate(len);
+    message_buffer[3] = @truncate(len >> 8);
+
+    uart.writeBytes(message_buffer[0 .. len + 4]);
 }

@@ -40,7 +40,6 @@ pub fn init() !void {
 
     for (meta.valid, 1..) |valid, i| {
         if (valid) {
-            messaging.sendDebug("Reading saved subscription {}", .{i});
             var subscription_bytes: lib.Subscription.Bytes = undefined;
             read(flash_start_address + (i * msdk.MXC_FLASH_PAGE_SIZE), &subscription_bytes);
             root.subscriptions[i - 1] = lib.Subscription.init(
