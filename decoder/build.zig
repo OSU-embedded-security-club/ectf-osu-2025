@@ -177,7 +177,7 @@ const Secrets = struct {
     subscription_key: [32]u8,
     public_key: [32]u8,
     channel_ids: [8]u16,
-    num_channel_ids: u3,
+    num_channel_ids: u4,
     flash_at_rest_key: [32]u8,
     metadata_key: [32]u8,
 };
@@ -204,7 +204,7 @@ fn getSecrets(allocator: std.mem.Allocator) !Secrets {
     defer secrets_unstructured.deinit();
     const seeds = secrets_unstructured.value.object.get("seeds").?;
     var channel_ids: [8]u16 = undefined;
-    var num_channel_ids: u3 = 0;
+    var num_channel_ids: u4 = 0;
     for (seeds.object.keys(), 0..) |key, i| {
         const channel_id = try std.fmt.parseInt(u16, key, 0);
         channel_ids[i] = channel_id;
