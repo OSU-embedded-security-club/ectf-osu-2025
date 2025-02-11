@@ -69,8 +69,8 @@ def gen_subscription(
         hashes.append(curr)
 
     plaintext_body = struct.pack("<QQH", start, end, channel) + b''.join(hashes)
-    encrypted_body = Salsa20.new(key=subscription_key, nonce=bytes(0 for i in range(8))).encrypt(plaintext_body)
-    signature = signer.sign(encrypted_body)
+    signature = signer.sign(plaintext_body)
+    encrypted_body = Salsa20.new(key=subscription_key, nonce=signature[0:8]).encrypt(plaintext_body)
 
     return signature + encrypted_body
 

@@ -22,14 +22,15 @@ const SubscribeHeader = extern struct {
 pub fn execute(body: []u8) !void {
     const signature_header: *const SignatureHeader = @ptrCast(body.ptr);
     const message_body = body[@sizeOf(SignatureHeader)..];
+
+    std.crypto.stream.salsa.Salsa20.xor(message_body, message_body, 0, secrets.subscription_key, signature_header.signature[0..8].*);
+    const header: *const SubscribeHeader = @ptrCast(message_body.ptr);
+
     const valid = ed25519.ed25519_verify(&signature_header.signature, message_body.ptr, message_body.len, &secrets.public_key);
     if (valid == 0) {
         messaging.sendDebug("Invalid signature", .{});
         return error.InvalidSignature;
     }
-
-    std.crypto.stream.salsa.Salsa20.xor(message_body, message_body, 0, secrets.subscription_key, std.mem.zeroes([8]u8));
-    const header: *const SubscribeHeader = @ptrCast(message_body.ptr);
 
     const channel_index = try root.getChannelIndex(header.channel_id);
     if (root.subscriptions[channel_index]) |*subscription| subscription.deinit();
