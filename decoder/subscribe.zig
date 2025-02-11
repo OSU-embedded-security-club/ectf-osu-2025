@@ -40,7 +40,7 @@ pub fn execute(body: []u8) !void {
         message_body[@sizeOf(SubscribeHeader)..],
     );
 
-    try flash.saveSubscriptions(@truncate(channel_index));
-
     try messaging.sendWithAcks('S', &.{});
+
+    try flash.saveSubscriptions(@truncate(channel_index));
 }
