@@ -15,8 +15,7 @@ const SubscribeHeader = extern struct {
 };
 
 pub fn execute(body: []u8) !void {
-    const key = secrets.subscription_key;
-    std.crypto.stream.salsa.Salsa20.xor(body, body, 0, key, std.mem.zeroes([8]u8));
+    std.crypto.stream.salsa.Salsa20.xor(body, body, 0, secrets.subscription_key, std.mem.zeroes([8]u8));
 
     const header: *const SubscribeHeader = @ptrCast(body.ptr);
     const channel_index = try root.getChannelIndex(header.channel_id);

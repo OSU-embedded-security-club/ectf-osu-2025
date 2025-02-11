@@ -30,6 +30,7 @@ def hash(data: bytes):
 class Encoder:
     seeds: dict[int, bytes]
     signer: eddsa.EdDSASigScheme
+    metadata_key: bytes
 
     def __init__(self, secrets: bytes):
         """
@@ -45,6 +46,7 @@ class Encoder:
             for channel, seed in secrets["seeds"].items()
         }
         self.signer = eddsa.new(ECC.import_key(secrets["private_key"]), "rfc8032")
+        self.metadata_key = bytes.fromhex(secrets["metadata_key"])
 
     def encode(self, channel: int, frame: bytes, timestamp: int) -> bytes:
         """The frame encoder function
@@ -79,7 +81,7 @@ class Encoder:
             message = struct.pack("<HQ", channel, timestamp) + encrypted_frame
 
         signature = self.signer.sign(message)
-        return signature + message
+        return Salsa20.new(key=self.metadata_key, nonce=bytes([0 for _ in range(8)])).encrypt(signature + message)
 
 
 def main():
