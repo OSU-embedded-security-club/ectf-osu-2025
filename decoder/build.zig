@@ -34,6 +34,9 @@ pub fn build(b: *std.Build) !void {
     const secrets = try getSecrets(b.allocator);
     options.addOption(@TypeOf(secrets.subscription_key), "subscription_key", secrets.subscription_key);
     options.addOption(@TypeOf(secrets.public_key), "public_key", secrets.public_key);
+    options.addOption([]const u16, "channel_ids", secrets.channel_ids[0..secrets.num_channel_ids]);
+    options.addOption(@TypeOf(secrets.flash_at_rest_key), "flash_at_rest_key", secrets.flash_at_rest_key);
+    options.addOption(@TypeOf(secrets.metadata_key), "metadata_key", secrets.metadata_key);
 
     if (env.get("MAXIM_PATH")) |msdk_path| {
         const msdk = b.addTranslateC(.{
@@ -173,6 +176,10 @@ pub fn build(b: *std.Build) !void {
 const Secrets = struct {
     subscription_key: [32]u8,
     public_key: [32]u8,
+    channel_ids: [8]u16,
+    num_channel_ids: u4,
+    flash_at_rest_key: [32]u8,
+    metadata_key: [32]u8,
 };
 
 fn getSecrets(allocator: std.mem.Allocator) !Secrets {
@@ -187,10 +194,22 @@ fn getSecrets(allocator: std.mem.Allocator) !Secrets {
     const SecretsJson = struct {
         subscription_salt: []const u8,
         public_key: []const u8,
+        metadata_key: []const u8,
     };
 
     const secrets = try std.json.parseFromSlice(SecretsJson, allocator, contents, .{ .ignore_unknown_fields = true });
     defer secrets.deinit();
+
+    const secrets_unstructured = try std.json.parseFromSlice(std.json.Value, allocator, contents, .{});
+    defer secrets_unstructured.deinit();
+    const seeds = secrets_unstructured.value.object.get("seeds").?;
+    var channel_ids: [8]u16 = undefined;
+    var num_channel_ids: u4 = 0;
+    for (seeds.object.keys(), 0..) |key, i| {
+        const channel_id = try std.fmt.parseInt(u16, key, 0);
+        channel_ids[i] = channel_id;
+    }
+    num_channel_ids = @intCast(seeds.object.count());
 
     const device_id = env.get("DECODER_ID") orelse "0xdeadbeef";
     const device_id_int = try std.fmt.parseInt(u32, device_id, 0);
@@ -198,12 +217,22 @@ fn getSecrets(allocator: std.mem.Allocator) !Secrets {
     var device_subscription_key: [32]u8 = undefined;
     std.crypto.hash.Blake3.hash(device_subscription_str, &device_subscription_key, .{});
 
-    var publicKey: [32]u8 = undefined;
-    _ = try std.fmt.hexToBytes(&publicKey, secrets.value.public_key);
+    var public_key: [32]u8 = undefined;
+    _ = try std.fmt.hexToBytes(&public_key, secrets.value.public_key);
+
+    var flash_at_rest_key: [32]u8 = undefined;
+    std.crypto.random.bytes(&flash_at_rest_key);
+
+    var metadata_key: [32]u8 = undefined;
+    _ = try std.fmt.hexToBytes(&metadata_key, secrets.value.metadata_key);
 
     return Secrets{
         .subscription_key = device_subscription_key,
-        .public_key = publicKey,
+        .public_key = public_key,
+        .channel_ids = channel_ids,
+        .num_channel_ids = num_channel_ids,
+        .flash_at_rest_key = flash_at_rest_key,
+        .metadata_key = metadata_key,
     };
 }
 

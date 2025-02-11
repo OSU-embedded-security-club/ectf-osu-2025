@@ -25,9 +25,13 @@ pub fn execute() !void {
     var list_channel_response = ListChannelResponse{ .num_channels = 0 };
 
     var channel_index: usize = 0;
-    for (root.subscriptions, 0..) |subscription, i| {
+    for (root.subscriptions) |subscription| {
         if (subscription) |sub| {
-            list_channel_response.subscriptions[channel_index] = SubscriptionEntry{ .channel_id = i + 1, .start = sub.serialized.start, .end = sub.serialized.end };
+            list_channel_response.subscriptions[channel_index] = SubscriptionEntry{
+                .channel_id = sub.serialized.channel_id,
+                .start = sub.serialized.start,
+                .end = sub.serialized.end,
+            };
             channel_index += 1;
         }
     }

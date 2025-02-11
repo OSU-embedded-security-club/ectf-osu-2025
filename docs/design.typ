@@ -157,7 +157,16 @@ The firmware must be built for each separate decoder device. When building, spec
 
 == Encode and Decode <encode-decode>
 
-#let bytesize(bytes) = rect(width: 4pt * bytes, height: 5pt, fill: navy)
+#let bytesize(bytes) = rect(
+  width: 4pt * bytes,
+  height: 5pt,
+  fill: navy,
+  stroke: navy,
+)
+#let variablebytesize(bytes) = box(
+  width: 4pt * bytes,
+  repeat(rect(width: 4pt, height: 5pt, stroke: navy)),
+)
 
 #figure(
   align(
@@ -166,10 +175,10 @@ The firmware must be built for each separate decoder device. When building, spec
       columns: 3,
       align: left,
       table.header([Field Name], [Size], [Relative Size]),
-      [Channel ID], [1 byte], bytesize(1),
-      [Timestamp], [8 bytes], bytesize(8),
-      [Message], [64 bytes], bytesize(64),
       [Signature], [64 bytes], bytesize(64),
+      [Channel ID], [2 byte], bytesize(2),
+      [Timestamp], [8 bytes], bytesize(8),
+      [Message], [up to 64 bytes], variablebytesize(64),
     ),
   ),
   caption: [Structure of a decode packet],
@@ -257,7 +266,7 @@ This aspect of the design secures the system in the following ways:
       columns: 3,
       align: left,
       table.header([Field Name], [Size], [Relative Size]),
-      [Channel ID], [1 byte], bytesize(1),
+      [Channel ID], [2 bytes], bytesize(2),
       [Start Timestamp], [8 bytes], bytesize(8),
       [End Timestamp], [8 bytes], bytesize(8),
       [Packed Subtree Root Hashes],

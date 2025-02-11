@@ -1,6 +1,7 @@
 const std = @import("std");
 const msdk = @import("msdk");
 const lib = @import("lib");
+const secrets = @import("secrets");
 
 const flash = @import("flash.zig");
 const uart = @import("uart.zig");
@@ -11,8 +12,39 @@ const decode = @import("decode.zig");
 
 pub var subscriptions = [8]?lib.Subscription{ null, null, null, null, null, null, null, null };
 
+pub fn getChannelIndex(channel_id: u16) DecoderError!u3 {
+    inline for (secrets.channel_ids, 0..) |id, i| {
+        if (channel_id == id) return i;
+    }
+    return error.UnknownChannelId;
+}
+
 const max_message_size = @max(list.max_message_size, subscribe.max_message_size, decode.max_message_size);
 var message_body_buffer: [max_message_size]u8 = undefined;
+
+const DecoderError = error{
+    /// The body is invalid for the given message kind attempting to be decoded
+    InvalidBody,
+
+    /// The message has an opcode which is not defined in the Functional Requirements
+    /// https://rules.ectf.mitre.org/2025/specs/detailed_specs.html#decoder-interface
+    InvalidOpcode,
+
+    /// A cryptographic signature has failed to verify. This suggests either a bit flip over UART, or critical tampering
+    InvalidSignature,
+
+    /// The decoder does not have a subscription to the channel ID
+    NoSubscription,
+
+    /// The frame trying to be decoded has a timestamp which is not within the subscription's interval for the channel
+    NotInSubscriptionTimeRange,
+
+    /// The decoder has been presented with a channel ID which it was not provisioned for
+    UnknownChannelId,
+
+    /// The decoder has already decoded a frame with a timestamp larger than the current frame's timestamp
+    DecreasingTimestamp,
+};
 
 /// High level entrypoint for the decoder
 fn run() !void {
@@ -23,10 +55,14 @@ fn run() !void {
     msdk.LED_Off(msdk.LED3);
     msdk.LED_On(msdk.LED2);
 
-    var n: usize = 0;
-    while (true) : (n += 1) {
+    while (true) {
         process() catch |err| {
-            messaging.sendDebug("caught err: {}", .{err});
+            // A major error has bubbled up to here, suggesting an unrecoverable state and that we are possibly under attack.
+            // We halt for 5 seconds for a small amount of brute-force attack prevention.
+            // https://rules.ectf.mitre.org/faq.html#can-we-add-intentional-delays-during-boot-to-make-it-more-difficult-for-an-attacker-to-collect-large-numbers-of-observations
+            _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(2450));
+            messaging.sendError("{}", .{err});
+            _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(2450));
         };
     }
 }
@@ -39,18 +75,14 @@ fn process() !void {
     switch (opcode) {
         'D', 'S' => messaging.sendAck(),
         'L' => {
-            if (length > 0) {
-                messaging.sendDebug("Error: list command has body", .{});
-                return error.ABORT;
-            }
+            if (length > 0) return error.InvalidBody;
 
             messaging.sendAck();
             try list.execute();
             return;
         },
         else => {
-            messaging.sendDebug("Error: invalid opcode", .{});
-            return error.ABORT;
+            return error.InvalidOpcode;
         },
     }
 
@@ -72,9 +104,17 @@ fn process() !void {
 export fn main() noreturn {
     _ = msdk.LED_Init();
 
+    msdk.LED_On(msdk.LED3);
+
+    // Wait for some time before we start processing to help prevent brute force attacks
+    // https://rules.ectf.mitre.org/faq.html#can-we-add-intentional-delays-during-boot-to-make-it-more-difficult-for-an-attacker-to-collect-large-numbers-of-observations
+    _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(4500));
+
+    msdk.LED_Off(msdk.LED3);
+
     var errored = false;
     run() catch |err| {
-        messaging.sendDebug("Fatal error {}", .{err});
+        messaging.sendError("Fatal {}", .{err});
         errored = true;
     };
 

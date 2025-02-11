@@ -33,13 +33,13 @@ def gen_secrets(channels: list[int]) -> bytes:
     """
 
     keypair = eddsa.import_private_key(os.urandom(32))
-    signer = eddsa.new(keypair, "rfc8032")
 
     secrets = {
         "seeds": {str(channel): os.urandom(24).hex() for channel in channels},
+        "metadata_key": os.urandom(32).hex(),
         "subscription_salt": os.urandom(32).hex(),
         "public_key": keypair.public_key().export_key(format="raw").hex(),
-        "private_key": keypair.export_key(format="DER").hex(),
+        "private_key": keypair.export_key(format="PEM"),
     }
 
     return json.dumps(secrets, indent=2).encode()
