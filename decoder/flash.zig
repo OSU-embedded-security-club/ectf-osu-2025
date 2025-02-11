@@ -1,8 +1,10 @@
 const std = @import("std");
 const msdk = @import("msdk");
-const messaging = @import("messaging.zig");
 const lib = @import("lib");
 const root = @import("root");
+const secrets = @import("secrets");
+
+const messaging = @import("messaging.zig");
 
 fn irq() callconv(.C) void {
     const temp = msdk.MXC_FLC0.*.intr;
@@ -27,13 +29,12 @@ pub fn init() !void {
     msdk.MXC_ICC_Disable(msdk.MXC_ICC0);
 
     var meta: PageMeta = undefined;
-    msdk.MXC_FLC_Read(flash_start_address, &meta, @sizeOf(@TypeOf(meta)));
+    read(flash_start_address, &meta);
 
     if (meta.first_boot != first_boot_magic) {
         messaging.sendDebug("First boot!", .{});
         meta = .{};
 
-        try lib.msdkTry(msdk.MXC_FLC_PageErase(flash_start_address));
         try write(flash_start_address, std.mem.asBytes(&meta));
         return;
     }
@@ -53,11 +54,18 @@ pub fn init() !void {
 }
 
 fn read(address: usize, v: anytype) void {
-    msdk.MXC_FLC_Read(@intCast(address), v, @sizeOf(@TypeOf(v.*)));
+    var body: [@sizeOf(@TypeOf(v.*))]u8 = undefined;
+    msdk.MXC_FLC_Read(@intCast(address), &body, @sizeOf(@TypeOf(v.*)));
+    std.crypto.stream.salsa.Salsa20.xor(&body, &body, 0, secrets.flash_at_rest_key, std.mem.zeroes([8]u8));
+    @memcpy(std.mem.asBytes(v), &body);
 }
 
-fn write(address: usize, buffer: []u8) !void {
-    try lib.msdkTry(msdk.MXC_FLC_Write(address, buffer.len, @ptrCast(@alignCast(buffer.ptr))));
+fn write(address: usize, v: anytype) !void {
+    var body: [@sizeOf(@TypeOf(v.*))]u8 = undefined;
+    @memcpy(&body, std.mem.asBytes(v));
+    std.crypto.stream.salsa.Salsa20.xor(&body, &body, 0, secrets.flash_at_rest_key, std.mem.zeroes([8]u8));
+    try lib.msdkTry(msdk.MXC_FLC_PageErase(address));
+    try lib.msdkTry(msdk.MXC_FLC_Write(address, body.len, @ptrCast(@alignCast(&body))));
 }
 
 pub fn saveSubscriptions(channel_index: u3) !void {
@@ -68,11 +76,9 @@ pub fn saveSubscriptions(channel_index: u3) !void {
         }
     }
 
-    try lib.msdkTry(msdk.MXC_FLC_PageErase(flash_start_address));
     try write(flash_start_address, std.mem.asBytes(&meta));
 
     const addr = flash_start_address + msdk.MXC_FLASH_PAGE_SIZE * (@as(usize, channel_index) + 1);
-    try lib.msdkTry(msdk.MXC_FLC_PageErase(addr));
     try write(addr, std.mem.asBytes(&root.subscriptions[channel_index].?));
 }
 

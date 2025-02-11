@@ -35,6 +35,7 @@ pub fn build(b: *std.Build) !void {
     options.addOption(@TypeOf(secrets.subscription_key), "subscription_key", secrets.subscription_key);
     options.addOption(@TypeOf(secrets.public_key), "public_key", secrets.public_key);
     options.addOption([]const u16, "channel_ids", secrets.channel_ids[0..secrets.num_channel_ids]);
+    options.addOption(@TypeOf(secrets.flash_at_rest_key), "flash_at_rest_key", secrets.flash_at_rest_key);
 
     if (env.get("MAXIM_PATH")) |msdk_path| {
         const msdk = b.addTranslateC(.{
@@ -176,6 +177,7 @@ const Secrets = struct {
     public_key: [32]u8,
     channel_ids: [8]u16,
     num_channel_ids: u3,
+    flash_at_rest_key: [32]u8,
 };
 
 fn getSecrets(allocator: std.mem.Allocator) !Secrets {
@@ -215,11 +217,15 @@ fn getSecrets(allocator: std.mem.Allocator) !Secrets {
     var publicKey: [32]u8 = undefined;
     _ = try std.fmt.hexToBytes(&publicKey, secrets.value.public_key);
 
+    var flash_at_rest_key: [32]u8 = undefined;
+    std.crypto.random.bytes(&flash_at_rest_key);
+
     return Secrets{
         .subscription_key = device_subscription_key,
         .public_key = publicKey,
         .channel_ids = channel_ids,
         .num_channel_ids = num_channel_ids,
+        .flash_at_rest_key = flash_at_rest_key,
     };
 }
 
