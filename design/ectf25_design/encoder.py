@@ -81,7 +81,7 @@ class Encoder:
             message = struct.pack("<HQ", channel, timestamp) + encrypted_frame
 
         signature = self.signer.sign(message)
-        return Salsa20.new(key=self.metadata_key, nonce=bytes([0 for _ in range(8)])).encrypt(signature + message)
+        return signature + Salsa20.new(key=self.metadata_key, nonce=signature[0:8]).encrypt(message)
 
 
 def main():

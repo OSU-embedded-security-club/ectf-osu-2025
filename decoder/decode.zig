@@ -18,13 +18,13 @@ const Decode = extern struct {
 };
 
 pub fn execute(body: []u8) !void {
-    std.crypto.stream.salsa.Salsa20.xor(body, body, 0, secrets.metadata_key, std.mem.zeroes([8]u8));
-
     if (body.len <= @offsetOf(Decode, "message") and body.len >= @sizeOf(Decode)) {
         return error.InvalidBody;
     }
 
     const dec: *Decode = @ptrCast(body.ptr);
+
+    std.crypto.stream.salsa.Salsa20.xor(body[@offsetOf(Decode, "channel")..], body[@offsetOf(Decode, "channel")..], 0, secrets.metadata_key, dec.signature[0..8].*);
 
     const message = body[@offsetOf(Decode, "channel")..];
     const valid = ed25519.ed25519_verify(&dec.signature, message.ptr, message.len, &secrets.public_key);
