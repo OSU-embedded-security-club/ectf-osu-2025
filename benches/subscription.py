@@ -14,7 +14,7 @@ def main():
 
     secrets = open('secrets/secrets.json', 'rb').read()
     channel = 1
-    subscription = gen_subscription(secrets=secrets, device_id=0xdeadbeef, start=1, end=2**64 - 2, channel=channel)
+    subscription = gen_subscription(secrets=secrets, device_id=0xdeadbeef, start=0, end=10, channel=channel)
 
     t = time.perf_counter()
     decoder.subscribe(subscription)

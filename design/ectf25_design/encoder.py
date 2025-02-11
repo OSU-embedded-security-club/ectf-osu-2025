@@ -44,7 +44,7 @@ class Encoder:
             int(channel): bytes.fromhex(seed)
             for channel, seed in secrets["seeds"].items()
         }
-        self.signer = eddsa.new(ECC.import_key(secrets["private_key"]), "rfc8032")
+        self.signer = eddsa.new(eddsa.import_private_key(bytes.fromhex(secrets["private_key"])), "rfc8032")
 
     def encode(self, channel: int, frame: bytes, timestamp: int) -> bytes:
         """The frame encoder function

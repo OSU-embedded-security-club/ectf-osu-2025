@@ -39,7 +39,7 @@ def gen_secrets(channels: list[int]) -> bytes:
         "seeds": {str(channel): os.urandom(24).hex() for channel in channels},
         "subscription_salt": os.urandom(32).hex(),
         "public_key": keypair.public_key().export_key(format="raw").hex(),
-        "private_key": keypair.export_key(format="PEM"),
+        "private_key": keypair.export_key(format="DER").hex(),
     }
 
     return json.dumps(secrets, indent=2).encode()

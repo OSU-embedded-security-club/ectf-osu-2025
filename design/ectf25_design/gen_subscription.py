@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from loguru import logger
 from blake3 import blake3
 from Crypto.Cipher import Salsa20
+from Crypto.Signature import eddsa
+from Crypto.PublicKey import ECC
 
 HASH_TREE_HEIGHT = 64
 LEFT_SALT = b"L"
@@ -51,6 +53,8 @@ def gen_subscription(
     secrets = json.loads(secrets)
     seed = bytes.fromhex(secrets["seeds"][str(channel)])
 
+    signer = eddsa.new(eddsa.import_private_key(bytes.fromhex(secrets["private_key"])), "rfc8032")
+
     roots = get_roots(start, end)
 
 
@@ -66,9 +70,14 @@ def gen_subscription(
 
     subscription_salt = bytes.fromhex(secrets["subscription_salt"])
     key = blake3(f"{subscription_salt.hex()}{device_id:08x}".encode()).digest()
+    message = struct.pack("<QQB", start, end, channel) + b''.join(hashes)
+    signature = signer.sign(message)
+    print("signature", signature.hex())
+    print("len", len(message))
 
     # Pack the subscription. This will be sent to the decoder with ectf25.tv.subscribe
-    return Salsa20.new(key=key, nonce=bytes(0 for i in range(8))).encrypt(struct.pack("<QQB", start, end, channel) + b''.join(hashes))
+    print("body", Salsa20.new(key=key, nonce=bytes(0 for i in range(8))).encrypt(message).hex())
+    return signature + Salsa20.new(key=key, nonce=bytes(0 for i in range(8))).encrypt(message)
 
 
 def ctz(x: int) -> int:
