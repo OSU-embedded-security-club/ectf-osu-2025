@@ -15,14 +15,14 @@ pub const Subscription = struct {
         root_hashes: [126][24]u8 = undefined,
     };
 
-    serialized: Bytes,
-    roots: [126]RootPosition = undefined,
+    serialized: *Bytes,
+    roots: []RootPosition = undefined,
     cached_hashes: [][24]u8 = undefined,
     root_index: isize = -1,
     last_timestamp: u64 = 0,
 
     pub inline fn asBytes(self: *Subscription) []u8 {
-        return std.mem.asBytes(&self.serialized);
+        return std.mem.asBytes(self.serialized);
     }
 
     pub fn init(channel_id: u16, start: u64, end: u64, root_hash_bytes: []const u8) Subscription {
@@ -31,9 +31,11 @@ pub const Subscription = struct {
         }
 
         var self: Subscription = .{
-            .serialized = .{ .channel_id = channel_id, .start = start, .end = end },
+            .serialized = std.heap.c_allocator.create(Bytes) catch @panic("OOM"),
             .cached_hashes = std.heap.c_allocator.alloc([24]u8, 65) catch @panic("OOM"),
+            .roots = std.heap.c_allocator.alloc(RootPosition, 126) catch @panic("OOM"),
         };
+        self.serialized.* = .{ .channel_id = channel_id, .start = start, .end = end };
 
         var iter = std.mem.window(u8, root_hash_bytes, 24, 24);
         var i: usize = 0;
@@ -48,7 +50,9 @@ pub const Subscription = struct {
     }
 
     pub fn deinit(self: *Subscription) void {
+        std.heap.c_allocator.destroy(self.serialized);
         std.heap.c_allocator.free(self.cached_hashes);
+        std.heap.c_allocator.free(self.roots);
     }
 
     fn calculateRootPositions(self: *Subscription) void {

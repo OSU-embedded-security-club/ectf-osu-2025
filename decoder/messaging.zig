@@ -54,7 +54,7 @@ pub fn sendAck() void {
     uart.writeBytes(&packet.asBytes());
 }
 
-var message_buffer: [256]u8 = undefined;
+var message_buffer: [64]u8 = undefined;
 
 pub fn sendDebug(comptime format: []const u8, args: anytype) void {
     const text = std.fmt.bufPrint(message_buffer[4..], format, args) catch @panic("Message too big");

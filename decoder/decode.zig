@@ -8,7 +8,7 @@ const messaging = @import("messaging.zig");
 
 pub const max_message_size = @sizeOf(@TypeOf(std.mem.zeroes(Decode).message));
 
-var last_timestamp: u64 = 0;
+var last_timestamp: ?u64 = null;
 
 const Decode = extern struct {
     signature: [64]u8 align(1),
@@ -41,14 +41,16 @@ pub fn execute(body: []u8) !void {
             return error.NotInSubscriptionTimeRange;
         }
 
-        if (dec.timestamp <= last_timestamp) {
+        if (last_timestamp) |t| if (dec.timestamp <= t)
             return error.DecreasingTimestamp;
-        }
-
         last_timestamp = dec.timestamp;
 
         const key = subscription.getKey(dec.timestamp);
         lib.crypto.decrypt(&dec.message, key);
+    } else {
+        if (last_timestamp) |t| if (dec.timestamp <= t)
+            return error.DecreasingTimestamp;
+        last_timestamp = dec.timestamp;
     }
 
     try messaging.sendWithAcks('D', dec.message[0 .. body.len - @offsetOf(Decode, "message")]);
