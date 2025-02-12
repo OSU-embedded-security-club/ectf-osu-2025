@@ -53,19 +53,31 @@ pub fn init() !void {
     }
 }
 
+var global_nonce: u64 = 0;
+
 fn read(address: usize, v: anytype) void {
-    var body: [@sizeOf(@TypeOf(v.*))]u8 = undefined;
-    msdk.MXC_FLC_Read(@intCast(address), &body, @sizeOf(@TypeOf(v.*)));
-    std.crypto.stream.salsa.Salsa20.xor(&body, &body, 0, secrets.flash_at_rest_key, std.mem.zeroes([8]u8));
-    @memcpy(std.mem.asBytes(v), &body);
+    var data: [@sizeOf(@TypeOf(global_nonce)) + @sizeOf(@TypeOf(v.*))]u8 = undefined;
+
+    msdk.MXC_FLC_Read(@intCast(address), &data, data.len);
+    const nonce = std.mem.readInt(@TypeOf(global_nonce), data[0..@sizeOf(@TypeOf(global_nonce))], .little);
+    global_nonce = @max(global_nonce, nonce);
+
+    const body = data[@sizeOf(@TypeOf(global_nonce))..];
+    std.crypto.stream.salsa.Salsa20.xor(body, body, 0, secrets.flash_at_rest_key, std.mem.zeroes([8]u8));
+    @memcpy(std.mem.asBytes(v), body);
 }
 
 fn write(address: usize, v: anytype) !void {
-    var body: [@sizeOf(@TypeOf(v.*))]u8 = undefined;
-    @memcpy(&body, std.mem.asBytes(v));
-    std.crypto.stream.salsa.Salsa20.xor(&body, &body, 0, secrets.flash_at_rest_key, std.mem.zeroes([8]u8));
+    var data: [@sizeOf(@TypeOf(global_nonce)) + @sizeOf(@TypeOf(v.*))]u8 = undefined;
+    global_nonce +%= 1;
+    std.mem.writeInt(@TypeOf(global_nonce), data[0..@sizeOf(@TypeOf(global_nonce))], global_nonce, .little);
+
+    const body = data[@sizeOf(@TypeOf(global_nonce))..];
+    @memcpy(body, std.mem.asBytes(v));
+    std.crypto.stream.salsa.Salsa20.xor(body, body, 0, secrets.flash_at_rest_key, std.mem.zeroes([8]u8));
+
     try lib.msdkTry(msdk.MXC_FLC_PageErase(address));
-    try lib.msdkTry(msdk.MXC_FLC_Write(address, body.len, @ptrCast(@alignCast(&body))));
+    try lib.msdkTry(msdk.MXC_FLC_Write(address, data.len, @ptrCast(@alignCast(&data))));
 }
 
 pub fn saveSubscriptions(channel_index: u3) !void {
