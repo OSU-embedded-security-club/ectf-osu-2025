@@ -18,6 +18,9 @@ const SubscribeHeader = extern struct {
     channel_id: u16 align(1),
 
     pub fn fromBytes(bytes: []u8) !*const SubscribeHeader {
+        if (bytes.len < @sizeOf(SubscribeHeader) + @offsetOf(lib.Subscription.Bytes, "root_hashes") or bytes.len > max_message_size)
+            return error.InvalidBody;
+
         const self: *const SubscribeHeader = @ptrCast(bytes.ptr);
 
         const data = bytes[@offsetOf(SubscribeHeader, "start")..];

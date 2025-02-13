@@ -27,20 +27,20 @@ const Decode = extern struct {
 
     /// Given a slice of bytes `body`, check that it is a valid Decode message,
     /// and return a pointer to it into the body
-    pub fn fromBytes(body: []u8) !*Decode {
+    pub fn fromBytes(bytes: []u8) !*Decode {
         // Make sure that `body` is a correct size, accounting for the fact that
         // the message is variable width
-        if (body.len <= @offsetOf(Decode, "message") or body.len > @sizeOf(Decode))
+        if (bytes.len < @offsetOf(Decode, "message") or bytes.len > @sizeOf(Decode))
             return error.InvalidBody;
 
-        const self: *Decode = @ptrCast(body.ptr);
+        const self: *Decode = @ptrCast(bytes.ptr);
 
         // The `channel_id`, `timestamp`, and `message` are encrypted with a
         // shared `metadata_key` between the encoder and decoder. Before we
         // continue, we must decrypt the metadata. The nonce is the first 8
         // bytes of the signature
         const nonce = self.signature[0..8];
-        const message = body[@offsetOf(Decode, "channel_id")..];
+        const message = bytes[@offsetOf(Decode, "channel_id")..];
         std.crypto.stream.salsa.Salsa20.xor(message, message, 0, secrets.metadata_key, nonce.*);
 
         // The asymmetric signature is verified over the plaintext contents.

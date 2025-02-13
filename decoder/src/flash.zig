@@ -75,6 +75,8 @@ var global_nonce: u64 = 0;
 /// Read from `address` in the flash into `ptr`
 fn read(address: usize, ptr: anytype) void {
     comptime std.debug.assert(8192 >= @sizeOf(@TypeOf(global_nonce)) + @sizeOf(@TypeOf(ptr.*)));
+    std.debug.assert(address >= msdk.MXC_FLASH_MEM_BASE);
+    std.debug.assert(address <= msdk.MXC_FLASH_MEM_BASE + msdk.MXC_FLASH_MEM_SIZE);
 
     // First read the nonce stored at the beginning of the flash page, and
     // potentially update the global nonce if this nonce is bigger (to prevent
@@ -93,6 +95,8 @@ fn read(address: usize, ptr: anytype) void {
 /// before writing to flash
 fn write(address: usize, bytes: []u8) !void {
     std.debug.assert(8192 >= @sizeOf(@TypeOf(global_nonce)) + bytes.len);
+    std.debug.assert(address >= msdk.MXC_FLASH_MEM_BASE);
+    std.debug.assert(address <= msdk.MXC_FLASH_MEM_BASE + msdk.MXC_FLASH_MEM_SIZE);
 
     // Increment the nonce so we don't reuse nonces
     global_nonce +%= 1;
