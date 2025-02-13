@@ -86,22 +86,33 @@ fn process() !void {
 
     // Read the rest of the header in the message
     // https://rules.ectf.mitre.org/2025/specs/detailed_specs.html#decoder-interface
-    const opcode = try uart.readByte();
+    const opcode = try messaging.RecvOpcode.fromByte(try uart.readByte());
     const length: u16 = @min(message_body_buffer.len, (try uart.readByte()) + (@as(u16, try uart.readByte()) << 8));
 
-    // Valid opcodes need their header to be ACKed. The list command has no
-    // body, so we can already handle it before processing the body
-    switch (opcode) {
-        'D', 'S' => messaging.sendAck(),
-        'L' => {
-            if (length > 0) return error.InvalidBody;
-            messaging.sendAck();
-            try list.execute();
-            return;
-        },
-        else => return error.InvalidOpcode,
-    }
+    // Valid opcodes need their header to be ACKed
+    messaging.sendAck();
 
+    switch (opcode) {
+        .List => {
+            // The list command has no body
+            if (length > 0) return error.InvalidBody;
+            try list.execute();
+        },
+        .Decode => {
+            const body = try readBody(length);
+            try decode.execute(body);
+        },
+        .Subscribe => {
+            const body = try readBody(length);
+            try subscribe.execute(body);
+        },
+        .Ack => {},
+    }
+}
+
+/// Read in up to `length` bytes into the global `message_body_buffer` while
+/// ACKing every 256 bytes, and return a slice into `message_body_buffer`
+fn readBody(length: u16) ![]u8 {
     // The length of the body that the host plans on sending should not be
     // bigger than the buffer that we read it into
     if (length >= message_body_buffer.len) return error.InvalidBody;
@@ -115,14 +126,7 @@ fn process() !void {
         messaging.sendAck();
     }
 
-    // Finally, execute the right command, now with the fully read in body
-    switch (opcode) {
-        'D' => try decode.execute(body),
-        'S' => try subscribe.execute(body),
-
-        // `opcode` handled above, so any other case is unreachable
-        else => unreachable,
-    }
+    return body;
 }
 
 /// Entrypoint for the decoder

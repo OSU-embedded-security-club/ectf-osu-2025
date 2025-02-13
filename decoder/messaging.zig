@@ -14,14 +14,55 @@ const uart = @import("uart.zig");
 /// Magic byte as specified by the decoder interface
 pub const magic = '%';
 
+/// Opcodes the decoder needs to handle which come from the host tools
+pub const RecvOpcode = enum {
+    Decode,
+    Subscribe,
+    List,
+    Ack,
+
+    /// Convert a raw byte into a `RecvOpcode`, or error if it is invalid
+    pub inline fn fromByte(byte: u8) !RecvOpcode {
+        return switch (byte) {
+            'D' => RecvOpcode.Decode,
+            'S' => RecvOpcode.Subscribe,
+            'L' => RecvOpcode.List,
+            'A' => RecvOpcode.Ack,
+            else => return error.InvalidOpcode,
+        };
+    }
+};
+
+/// Opcodes the decoder needs to send to the host
+pub const SendOpcode = enum {
+    Decode,
+    Subscribe,
+    List,
+    Ack,
+    Error,
+    Debug,
+
+    /// Serialize this opcode into a raw byte per the specification
+    inline fn toByte(self: SendOpcode) u8 {
+        return switch (self) {
+            .Decode => 'D',
+            .Subscribe => 'S',
+            .List => 'L',
+            .Ack => 'A',
+            .Error => 'E',
+            .Debug => 'G',
+        };
+    }
+};
+
 const Header = struct {
-    opcode: u8,
+    opcode: SendOpcode,
     length: u16 = 0,
 
     /// Convert this header into the wire format
     pub fn asBytes(self: Header) [4]u8 {
         const len: u16 = @truncate(self.length);
-        return [4]u8{ magic, self.opcode, @truncate(len), @truncate(len >> 8) };
+        return [4]u8{ magic, self.opcode.toByte(), @truncate(len), @truncate(len >> 8) };
     }
 };
 
@@ -30,8 +71,8 @@ fn waitForAck() !void {
     while (true) {
         while (try uart.readByte() != magic) {}
 
-        const opcode = try uart.readByte();
-        if (opcode != 'A') continue;
+        const opcode = try RecvOpcode.fromByte(try uart.readByte());
+        if (opcode != .Ack) continue;
 
         const higher_length = try uart.readByte();
         if (higher_length != 0) continue;
@@ -45,7 +86,7 @@ fn waitForAck() !void {
 
 /// Send a message of kind `opcode` to the host with a body of `bytes`, ACKing
 /// every 256 bytes
-pub fn sendWithAcks(opcode: u8, bytes: []const u8) !void {
+pub fn sendWithAcks(opcode: SendOpcode, bytes: []const u8) !void {
     var header = Header{ .opcode = opcode, .length = @intCast(bytes.len) };
 
     uart.writeBytes(&header.asBytes());
@@ -62,7 +103,7 @@ pub fn sendWithAcks(opcode: u8, bytes: []const u8) !void {
 
 /// Send a single ACK to the host
 pub fn sendAck() void {
-    const packet = Header{ .opcode = 'A' };
+    const packet = Header{ .opcode = .Ack };
     uart.writeBytes(&packet.asBytes());
 }
 
@@ -73,24 +114,18 @@ var message_buffer: [64]u8 = undefined;
 pub fn sendDebug(comptime format: []const u8, args: anytype) void {
     const text = std.fmt.bufPrint(message_buffer[4..], format, args) catch @panic("Message too big");
 
-    const len: u16 = @truncate(text.len);
-    message_buffer[0] = magic;
-    message_buffer[1] = 'G';
-    message_buffer[2] = @truncate(len);
-    message_buffer[3] = @truncate(len >> 8);
+    const header = Header{ .opcode = .Debug, .length = @truncate(text.len) };
+    @memcpy(message_buffer[0..4], &header.asBytes());
 
-    uart.writeBytes(message_buffer[0 .. len + 4]);
+    uart.writeBytes(message_buffer[0 .. text.len + 4]);
 }
 
 /// Send an Error message to the host
 pub fn sendError(comptime format: []const u8, args: anytype) void {
     const text = std.fmt.bufPrint(message_buffer[4..], format, args) catch @panic("Message too big");
 
-    const len: u16 = @truncate(text.len);
-    message_buffer[0] = magic;
-    message_buffer[1] = 'E';
-    message_buffer[2] = @truncate(len);
-    message_buffer[3] = @truncate(len >> 8);
+    const header = Header{ .opcode = .Error, .length = @truncate(text.len) };
+    @memcpy(message_buffer[0..4], &header.asBytes());
 
-    uart.writeBytes(message_buffer[0 .. len + 4]);
+    uart.writeBytes(message_buffer[0 .. text.len + 4]);
 }

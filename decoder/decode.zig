@@ -78,5 +78,5 @@ pub fn execute(body: []u8) !void {
 
     last_timestamp = decode.timestamp;
 
-    try messaging.sendWithAcks('D', body[@offsetOf(Decode, "message")..]);
+    try messaging.sendWithAcks(.Decode, body[@offsetOf(Decode, "message")..]);
 }

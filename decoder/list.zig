@@ -46,5 +46,5 @@ const ListChannelResponse = extern struct {
 /// Send a List Channels response
 pub fn execute() !void {
     var list_channel_response = ListChannelResponse.init();
-    try messaging.sendWithAcks('L', list_channel_response.asBytes());
+    try messaging.sendWithAcks(.List, list_channel_response.asBytes());
 }

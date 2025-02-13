@@ -45,5 +45,5 @@ pub fn execute(body: []u8) !void {
 
     try flash.saveSubscriptions(@truncate(channel_index));
 
-    try messaging.sendWithAcks('S', &.{});
+    try messaging.sendWithAcks(.Subscribe, &.{});
 }
