@@ -30,6 +30,8 @@ pub fn build(b: *std.Build) !void {
 
     const env = try std.process.getEnvMap(b.allocator);
 
+    // Derive all required secrets, and make them available to the firmware at
+    // build time
     var options = b.addOptions();
     const secrets = try getSecrets(b.allocator);
     options.addOption(@TypeOf(secrets.subscription_key), "subscription_key", secrets.subscription_key);
@@ -38,6 +40,7 @@ pub fn build(b: *std.Build) !void {
     options.addOption(@TypeOf(secrets.flash_at_rest_key), "flash_at_rest_key", secrets.flash_at_rest_key);
     options.addOption(@TypeOf(secrets.metadata_key), "metadata_key", secrets.metadata_key);
 
+    // Add the MSDK
     if (env.get("MAXIM_PATH")) |msdk_path| {
         const msdk = b.addTranslateC(.{
             .root_source_file = b.path("msdk_includes.h"),
@@ -103,6 +106,7 @@ pub fn build(b: *std.Build) !void {
         decoder_step.dependOn(&msdk.step);
     }
 
+    // Add the Ed25519 C library to the build
     if (env.get("ED25519_PATH")) |ed25519_path| {
         const ed25519 = b.addTranslateC(.{
             .root_source_file = b.path("ed25519_includes.h"),
@@ -182,7 +186,11 @@ const Secrets = struct {
     metadata_key: [32]u8,
 };
 
+/// Use the shared secrets between the encoder and decoder in
+/// `secrets/secrets.json` to derive keys and metadata, and generate other
+/// required secrets that the decoder needs
 fn getSecrets(allocator: std.mem.Allocator) !Secrets {
+    // Read in secrets JSON file
     const env = try std.process.getEnvMap(allocator);
     const secrets_path = env.get("SECRETS") orelse "../secrets/secrets.json";
     const file = try std.fs.cwd().openFile(secrets_path, .{});
@@ -200,6 +208,7 @@ fn getSecrets(allocator: std.mem.Allocator) !Secrets {
     const secrets = try std.json.parseFromSlice(SecretsJson, allocator, contents, .{ .ignore_unknown_fields = true });
     defer secrets.deinit();
 
+    // Get the allowed channel IDs in this encoder/decoder deployment
     const secrets_unstructured = try std.json.parseFromSlice(std.json.Value, allocator, contents, .{});
     defer secrets_unstructured.deinit();
     const seeds = secrets_unstructured.value.object.get("seeds").?;
@@ -211,18 +220,22 @@ fn getSecrets(allocator: std.mem.Allocator) !Secrets {
     }
     num_channel_ids = @intCast(seeds.object.count());
 
+    // Derive the subscription key
     const device_id = env.get("DECODER_ID") orelse "0xdeadbeef";
     const device_id_int = try std.fmt.parseInt(u32, device_id, 0);
     const device_subscription_str = try std.fmt.allocPrint(allocator, "{s}{x:0>8}", .{ secrets.value.subscription_salt, device_id_int });
     var device_subscription_key: [32]u8 = undefined;
     std.crypto.hash.Blake3.hash(device_subscription_str, &device_subscription_key, .{});
 
+    // Get the public key
     var public_key: [32]u8 = undefined;
     _ = try std.fmt.hexToBytes(&public_key, secrets.value.public_key);
 
+    // Generate a random key to encrypt the flash at rest
     var flash_at_rest_key: [32]u8 = undefined;
     std.crypto.random.bytes(&flash_at_rest_key);
 
+    // Get the shared symmetric key which all metadata is encrypted with
     var metadata_key: [32]u8 = undefined;
     _ = try std.fmt.hexToBytes(&metadata_key, secrets.value.metadata_key);
 

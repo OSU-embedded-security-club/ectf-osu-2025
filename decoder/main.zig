@@ -1,3 +1,5 @@
+//! Entrypoint and main loop
+
 const std = @import("std");
 const msdk = @import("msdk");
 const lib = @import("lib");
@@ -10,8 +12,11 @@ const list = @import("list.zig");
 const subscribe = @import("subscribe.zig");
 const decode = @import("decode.zig");
 
+/// Global list of up to 8 subscriptions
 pub var subscriptions = [8]?lib.Subscription{ null, null, null, null, null, null, null, null };
 
+/// Validate a `channel_id` is one which this decoder was provisioned for, and
+/// get the index into the global `subscriptions` array for it
 pub fn getChannelIndex(channel_id: u16) DecoderError!u3 {
     inline for (secrets.channel_ids, 0..) |id, i| {
         if (channel_id == id) return i;
@@ -19,7 +24,11 @@ pub fn getChannelIndex(channel_id: u16) DecoderError!u3 {
     return error.UnknownChannelId;
 }
 
-const max_message_size = @max(list.max_message_size, subscribe.max_message_size, decode.max_message_size);
+/// The size of the biggest possible message we expect
+const max_message_size = @max(subscribe.max_message_size, decode.max_message_size);
+
+/// The buffer which messages are written into and used while processing. It is
+/// the size of the biggest possible message we expect, `max_message_size`
 var message_body_buffer: []u8 = undefined;
 
 const DecoderError = error{
@@ -51,13 +60,13 @@ fn run() !void {
     try uart.init();
     try flash.init();
 
-    msdk.LED_Off(msdk.LED1);
-    msdk.LED_Off(msdk.LED3);
+    // Turn on the green LED to indicate we are successfully processing
     msdk.LED_On(msdk.LED2);
 
     message_body_buffer = try std.heap.c_allocator.alloc(u8, max_message_size);
     defer std.heap.c_allocator.free(message_body_buffer);
 
+    // Process messages forever. On error, send it to the host, and continue processing messages
     while (true) {
         process() catch |err| {
             // A major error has bubbled up to here, suggesting an unrecoverable state and that we are possibly under attack.
@@ -70,59 +79,78 @@ fn run() !void {
     }
 }
 
+/// Read until we get one message, then process it
 fn process() !void {
+    // Spin until we get to the magic byte
     while (try uart.readByte() != messaging.magic) {}
+
+    // Read the rest of the header in the message
+    // https://rules.ectf.mitre.org/2025/specs/detailed_specs.html#decoder-interface
     const opcode = try uart.readByte();
     const length: u16 = @min(message_body_buffer.len, (try uart.readByte()) + (@as(u16, try uart.readByte()) << 8));
 
+    // Valid opcodes need their header to be ACKed. The list command has no
+    // body, so we can already handle it before processing the body
     switch (opcode) {
         'D', 'S' => messaging.sendAck(),
         'L' => {
             if (length > 0) return error.InvalidBody;
-
             messaging.sendAck();
             try list.execute();
             return;
         },
-        else => {
-            return error.InvalidOpcode;
-        },
+        else => return error.InvalidOpcode,
     }
 
+    // The length of the body that the host plans on sending should not be
+    // bigger than the buffer that we read it into
+    if (length >= message_body_buffer.len) return error.InvalidBody;
+
     var body = message_body_buffer[0..length];
+
+    // ACK between reading in every 256 bytes
     var i: usize = 0;
     while (i < length) : (i += 256) {
         uart.readBytes(body[i..@min(i + 256, length)]);
         messaging.sendAck();
     }
 
+    // Finally, execute the right command, now with the fully read in body
     switch (opcode) {
         'D' => try decode.execute(body),
         'S' => try subscribe.execute(body),
+
+        // `opcode` handled above, so any other case is unreachable
         else => unreachable,
     }
 }
 
 /// Entrypoint for the decoder
-export fn main() noreturn {
+export fn main() callconv(.C) noreturn {
     _ = msdk.LED_Init();
 
+    // Turn on blue LED to indicate we have not started yet
     msdk.LED_On(msdk.LED3);
 
     // Wait for some time before we start processing to help prevent brute force attacks
     // https://rules.ectf.mitre.org/faq.html#can-we-add-intentional-delays-during-boot-to-make-it-more-difficult-for-an-attacker-to-collect-large-numbers-of-observations
     _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(4500));
 
+    // Turn off the blue LED and start the startup process
     msdk.LED_Off(msdk.LED3);
 
+    // Wrap our idiomatic Zig entrypoint `run` to catch its error
     var errored = false;
     run() catch |err| {
         messaging.sendError("Fatal {}", .{err});
         errored = true;
     };
 
+    // The program is done executing now. If we errored, blink red. If we ended
+    // successfully, blink green. Note that it should not be possible to end
+    // successfully, because the decoder should be running constantly in `run`,
+    // but we still need to satisfy the `noreturn` of this function we are in
     const led: c_uint = if (errored) msdk.LED1 else msdk.LED2;
-
     while (true) {
         msdk.LED_On(led);
         _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(100));

@@ -1,14 +1,17 @@
+//! Shared library which implements common
+
 const std = @import("std");
 
 pub const Subscription = @import("subscription.zig").Subscription;
 pub const crypto = @import("crypto.zig");
 
-// zig needs comptime imports to not optimize out our unit tests
+// Zig needs comptime imports to not optimize out our unit tests
 comptime {
     _ = @import("subscription.zig");
 }
 
-/// See https://github.com/analogdevicesinc/msdk/blob/4f0d3d320b29c455153ea16dc34a08d87ddd85a8/Libraries/PeriphDrivers/Include/MAX78000/mxc_errors.h
+/// Zig translation of the MSDK's error macros
+/// https://github.com/analogdevicesinc/msdk/blob/4f0d3d320b29c455153ea16dc34a08d87ddd85a8/Libraries/PeriphDrivers/Include/MAX78000/mxc_errors.h
 const MXCError = enum(c_int) {
     E_NO_ERROR = 0,
     E_NULL_PTR = -1,
@@ -30,6 +33,7 @@ const MXCError = enum(c_int) {
     E_FAIL = -255,
 };
 
+/// Zig error codes corresponding to the MSDK's error codes
 pub const MSDKError = error{
     NO_ERROR,
     NULL_PTR,
@@ -51,6 +55,7 @@ pub const MSDKError = error{
     FAIL,
 };
 
+/// Return a Zig error if an MSDK function returned an error
 pub fn msdkTry(err: c_int) MSDKError!void {
     switch (@as(MXCError, @enumFromInt(err))) {
         MXCError.E_NO_ERROR => return,

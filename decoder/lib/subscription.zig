@@ -1,3 +1,6 @@
+//! Interface for interacting with a subscription and its key hash derivation
+//! tree. See the design documentation for the theory
+
 const std = @import("std");
 
 const crypto = @import("crypto.zig");
@@ -7,7 +10,8 @@ const LEFT_SALT = 'L';
 const RIGHT_SALT = 'R';
 
 pub const Subscription = struct {
-    /// Minimal representation of a subscription in memory
+    /// Minimal representation of a subscription in memory. Used to import from
+    /// a Update Subscription message, reading from flash, and writing to flash
     pub const Bytes = extern struct {
         channel_id: u16,
         start: u64,
@@ -21,10 +25,13 @@ pub const Subscription = struct {
     root_index: isize = -1,
     last_timestamp: u64 = 0,
 
+    /// Get the underlying bytes of this `Subscription`
     pub inline fn asBytes(self: *Subscription) []u8 {
         return std.mem.asBytes(self.serialized);
     }
 
+    /// Create a new `Subscription`. Copies data from `root_hash_bytes` into the
+    /// `Subscription`
     pub fn init(channel_id: u16, start: u64, end: u64, root_hash_bytes: []const u8) Subscription {
         if (start > end) {
             @panic("Invalid range: a > b");
@@ -37,6 +44,8 @@ pub const Subscription = struct {
         };
         self.serialized.* = .{ .channel_id = channel_id, .start = start, .end = end };
 
+        // Walk over the raw `root_hash_bytes` and split it into the 24 byte
+        // hash chunks required
         var iter = std.mem.window(u8, root_hash_bytes, 24, 24);
         var i: usize = 0;
         while (iter.next()) |hash| {
@@ -49,12 +58,16 @@ pub const Subscription = struct {
         return self;
     }
 
+    /// Free the `Subscription`
     pub fn deinit(self: *Subscription) void {
         std.heap.c_allocator.destroy(self.serialized);
         std.heap.c_allocator.free(self.cached_hashes);
         std.heap.c_allocator.free(self.roots);
     }
 
+    /// Cache the positions (offset and length) of each root in the tree using
+    /// the `start` and `end` timestamps of this `Subscription`. Each root
+    /// position corresponds to the
     fn calculateRootPositions(self: *Subscription) void {
         if (self.serialized.start == 0 and self.serialized.end == std.math.maxInt(u64)) {
             self.roots[0] = RootPosition{ .offset = 0, .power = 64 };
@@ -74,15 +87,20 @@ pub const Subscription = struct {
         }
     }
 
+    /// Retrieve the key from this `Subscription` corresponding to the
+    /// `timestamp`
     pub fn getKey(self: *Subscription, timestamp: u64) [24]u8 {
         if (timestamp > self.serialized.end) @panic("Timestamp past end of subscription");
         if (timestamp < self.last_timestamp) @panic("Decreasing timestamp");
 
-        // Calculate the number of lower bits changed
+        // Calculate the number of lower bits changed since the last retrieved
+        // key on this subscription/channel. This tells us how many hashes we
+        // can reuse, minimizing the number of hashes we have to compute
         var hash_index = 64 - @clz(self.last_timestamp ^ timestamp);
 
         self.last_timestamp = timestamp;
 
+        // Jump to the next root if our timestamp isn't in the current root
         const root_index: usize = @intCast(self.root_index + 1);
         for (self.roots[root_index..], root_index..) |root, i| {
             if (root.includes(timestamp)) {
@@ -93,6 +111,8 @@ pub const Subscription = struct {
             }
         }
 
+        // Start from the lowest possible hash we have already computed, walk
+        // the down choosing left or right on the bit
         var i = hash_index;
         while (i > 0) : (i -= 1) {
             var hasher = std.crypto.hash.Blake3.init(.{});
@@ -100,7 +120,15 @@ pub const Subscription = struct {
             hasher.update(&[_]u8{if (timestamp & (@as(u64, 1) << @truncate(i - 1)) == 0) LEFT_SALT else RIGHT_SALT});
             hasher.final(&self.cached_hashes[i - 1]);
         }
+
+        // Finally, our last hashed value is the symmetric key used to decode
+        // this `timestamp`
         return self.cached_hashes[0];
+    }
+
+    /// Checks if this subscription contains `timestamp`
+    pub fn includes(self: *Subscription, timestamp: u64) bool {
+        return timestamp >= self.serialized.start and timestamp <= self.serialized.end;
     }
 };
 
@@ -108,23 +136,22 @@ const RootPosition = struct {
     offset: u64,
     power: u7,
 
+    /// Get starting timestamp of this root
     inline fn start(self: RootPosition) u64 {
         return self.offset;
     }
 
+    /// Get ending timestamp of this root
     inline fn end(self: RootPosition) u64 {
         if (self.power == 64) return std.math.maxInt(u64);
         return self.offset + (@as(u64, 1) << @truncate(self.power)) - 1;
     }
 
+    /// Check if a timestamp is included in this root
     inline fn includes(self: RootPosition, timestamp: u64) bool {
         return timestamp >= self.start() and timestamp <= self.end();
     }
 };
-
-test "ctz" {
-    try std.testing.expectEqual(64, @ctz(@as(u64, 0)));
-}
 
 test "getKey" {
     const root_hashes: []const [24]u8 = &[_][24]u8{
