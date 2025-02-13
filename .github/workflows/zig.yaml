@@ -65,14 +65,19 @@ jobs:
       with:
         version: 0.13.0
 
-    # - name: Install msdk
-    #   run: |
-    #     git clone --depth=1 --branch v2024_02 https://github.com/Analog-Devices-MSDK/msdk
-    #     echo "MAXIM_PATH=$PWD/msdk" >> $GITHUB_ENV
+    - name: Install msdk
+      run: |
+        git clone --depth=1 --branch v2024_02 https://github.com/Analog-Devices-MSDK/msdk
+        echo "MAXIM_PATH=$PWD/msdk" >> $GITHUB_ENV
 
-    # - name: Install ARM GCC
-    #   run: |
-    #     sudo apt-get install -y gcc-arm-none-eabi
+    - name: Install ed25519
+      run: |
+        git clone --depth=1 https://github.com/orlp/ed25519
+        echo "ED25519_PATH=$PWD/ed25519" >> $GITHUB_ENV
+
+    - name: Install ARM GCC
+      run: |
+        sudo apt-get install -y gcc-arm-none-eabi
 
     - name: Build documentation
       working-directory: decoder
