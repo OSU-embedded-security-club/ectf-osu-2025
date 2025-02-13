@@ -22,11 +22,27 @@ pub fn build(b: *std.Build) !void {
     });
 
     const unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/lib/main.zig"),
+        .root_source_file = b.path("src/lib/lib.zig"),
         .target = b.resolveTargetQuery(.{}),
         .link_libc = true,
     });
     const test_step = b.step("test", "Run unit tests");
+
+    const docs = b.addObject(.{
+        .name = "main",
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = .Debug,
+        .link_libc = true,
+    });
+
+    const install_docs = b.addInstallDirectory(.{
+        .source_dir = docs.getEmittedDocs(),
+        .install_dir = .{ .custom = ".." },
+        .install_subdir = "docs",
+    });
+    const docs_step = b.step("docs", "Generate documentation");
+    docs_step.dependOn(&install_docs.step);
 
     const env = try std.process.getEnvMap(b.allocator);
 
@@ -39,6 +55,8 @@ pub fn build(b: *std.Build) !void {
     options.addOption([]const u16, "channel_ids", secrets.channel_ids[0..secrets.num_channel_ids]);
     options.addOption(@TypeOf(secrets.flash_at_rest_key), "flash_at_rest_key", secrets.flash_at_rest_key);
     options.addOption(@TypeOf(secrets.metadata_key), "metadata_key", secrets.metadata_key);
+    decoder_exe.root_module.addOptions("secrets", options);
+    docs.root_module.addOptions("secrets", options);
 
     // Add the MSDK
     if (env.get("MAXIM_PATH")) |msdk_path| {
@@ -102,8 +120,10 @@ pub fn build(b: *std.Build) !void {
 
         const msdk_module = msdk.createModule();
         decoder_exe.root_module.addImport("msdk", msdk_module);
+        docs.root_module.addImport("msdk", msdk_module);
 
         decoder_step.dependOn(&msdk.step);
+        docs_step.dependOn(&msdk.step);
     }
 
     // Add the Ed25519 C library to the build
@@ -126,6 +146,7 @@ pub fn build(b: *std.Build) !void {
         const ed25519_module = ed25519.createModule();
         decoder_exe.root_module.addImport("ed25519", ed25519_module);
         unit_tests.root_module.addImport("ed25519", ed25519_module);
+        docs.root_module.addImport("ed25519", ed25519_module);
 
         unit_tests.addCSourceFiles(.{ .root = .{ .cwd_relative = ed25519_path }, .files = &.{
             "src/add_scalar.c",
@@ -142,14 +163,15 @@ pub fn build(b: *std.Build) !void {
 
         decoder_step.dependOn(&ed25519.step);
         test_step.dependOn(&ed25519.step);
+        docs_step.dependOn(&ed25519.step);
     }
 
     const lib_module = b.createModule(.{
-        .root_source_file = b.path("src/lib/main.zig"),
+        .root_source_file = b.path("src/lib/lib.zig"),
     });
 
-    decoder_exe.root_module.addOptions("secrets", options);
     decoder_exe.root_module.addImport("lib", lib_module);
+    docs.root_module.addImport("lib", lib_module);
 
     const lib_dir_step = try ZigLibDir.create(b);
     decoder_step.dependOn(&lib_dir_step.step);
@@ -159,20 +181,6 @@ pub fn build(b: *std.Build) !void {
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
     test_step.dependOn(&run_unit_tests.step);
-
-    const docs = b.addObject(.{
-        .name = "main",
-        .root_source_file = b.path("src/lib/main.zig"),
-        .target = target,
-        .optimize = .Debug,
-    });
-    const install_docs = b.addInstallDirectory(.{
-        .source_dir = docs.getEmittedDocs(),
-        .install_dir = .{ .custom = ".." },
-        .install_subdir = "docs",
-    });
-    const docs_step = b.step("docs", "Generate documentation");
-    docs_step.dependOn(&install_docs.step);
 
     decoder_step.dependOn(&decoder_exe.step);
 }

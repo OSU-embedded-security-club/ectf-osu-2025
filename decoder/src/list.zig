@@ -7,7 +7,7 @@ const messaging = @import("messaging.zig");
 
 /// A single entry in the list response of subscriptions
 /// https://rules.ectf.mitre.org/2025/specs/detailed_specs.html#id6
-pub const SubscriptionEntry = extern struct {
+const SubscriptionEntry = extern struct {
     channel_id: u32 align(1),
     start: u64 align(1),
     end: u64 align(1),

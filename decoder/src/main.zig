@@ -2,15 +2,15 @@
 
 const std = @import("std");
 const msdk = @import("msdk");
-const lib = @import("lib");
 const secrets = @import("secrets");
+pub const lib = @import("lib");
 
-const flash = @import("flash.zig");
-const uart = @import("uart.zig");
-const messaging = @import("messaging.zig");
-const list = @import("list.zig");
-const subscribe = @import("subscribe.zig");
-const decode = @import("decode.zig");
+pub const flash = @import("flash.zig");
+pub const uart = @import("uart.zig");
+pub const messaging = @import("messaging.zig");
+pub const list = @import("list.zig");
+pub const subscribe = @import("subscribe.zig");
+pub const decode = @import("decode.zig");
 
 /// Global list of up to 8 subscriptions
 pub var subscriptions = [8]?lib.Subscription{ null, null, null, null, null, null, null, null };

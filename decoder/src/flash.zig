@@ -31,7 +31,7 @@ fn irq() callconv(.C) void {
     }
 }
 
-/// Initialize flash, and read in any saved subscriptions into RAM
+/// Initialize flash and read in any saved subscriptions into RAM
 pub fn init() !void {
     msdk.MXC_NVIC_SetVector(msdk.FLC0_IRQn, irq);
 
