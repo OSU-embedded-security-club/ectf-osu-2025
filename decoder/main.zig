@@ -20,7 +20,7 @@ pub fn getChannelIndex(channel_id: u16) DecoderError!u3 {
 }
 
 const max_message_size = @max(list.max_message_size, subscribe.max_message_size, decode.max_message_size);
-var message_body_buffer: [max_message_size]u8 = undefined;
+var message_body_buffer: []u8 = undefined;
 
 const DecoderError = error{
     /// The body is invalid for the given message kind attempting to be decoded
@@ -54,6 +54,9 @@ fn run() !void {
     msdk.LED_Off(msdk.LED1);
     msdk.LED_Off(msdk.LED3);
     msdk.LED_On(msdk.LED2);
+
+    message_body_buffer = try std.heap.c_allocator.alloc(u8, max_message_size);
+    defer std.heap.c_allocator.free(message_body_buffer);
 
     while (true) {
         process() catch |err| {

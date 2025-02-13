@@ -55,29 +55,28 @@ pub fn init() !void {
 
 var global_nonce: u64 = 0;
 
-fn read(address: usize, v: anytype) void {
-    var data: [@sizeOf(@TypeOf(global_nonce)) + @sizeOf(@TypeOf(v.*))]u8 = undefined;
-
-    msdk.MXC_FLC_Read(@intCast(address), &data, data.len);
-    const nonce = std.mem.readInt(@TypeOf(global_nonce), data[0..@sizeOf(@TypeOf(global_nonce))], .little);
+fn read(address: usize, ptr: anytype) void {
+    var nonce: @TypeOf(global_nonce) = undefined;
+    msdk.MXC_FLC_Read(@intCast(address), &nonce, @sizeOf(@TypeOf(nonce)));
     global_nonce = @max(global_nonce, nonce);
 
-    const body = data[@sizeOf(@TypeOf(global_nonce))..];
-    std.crypto.stream.salsa.Salsa20.xor(body, body, 0, secrets.flash_at_rest_key, std.mem.zeroes([8]u8));
-    @memcpy(std.mem.asBytes(v), body);
+    msdk.MXC_FLC_Read(@intCast(address + @sizeOf(@TypeOf(global_nonce))), ptr, @sizeOf(@TypeOf(ptr.*)));
+    const b = std.mem.asBytes(ptr);
+    std.crypto.stream.salsa.Salsa20.xor(b, b, 0, secrets.flash_at_rest_key, std.mem.toBytes(nonce));
 }
 
-fn write(address: usize, v: anytype) !void {
-    var data: [@sizeOf(@TypeOf(global_nonce)) + @sizeOf(@TypeOf(v.*))]u8 = undefined;
+fn write(address: usize, bytes: []u8) !void {
     global_nonce +%= 1;
-    std.mem.writeInt(@TypeOf(global_nonce), data[0..@sizeOf(@TypeOf(global_nonce))], global_nonce, .little);
 
-    const body = data[@sizeOf(@TypeOf(global_nonce))..];
-    @memcpy(body, std.mem.asBytes(v));
-    std.crypto.stream.salsa.Salsa20.xor(body, body, 0, secrets.flash_at_rest_key, std.mem.zeroes([8]u8));
+    // this encrypts the underlying bytes, which is problematic because after
+    // this function returns, the bytes will be garbled. So, once we are done
+    // writing it to flash, we need to decrypt the underlying bytes back
+    std.crypto.stream.salsa.Salsa20.xor(bytes, bytes, 0, secrets.flash_at_rest_key, std.mem.toBytes(global_nonce));
+    defer std.crypto.stream.salsa.Salsa20.xor(bytes, bytes, 0, secrets.flash_at_rest_key, std.mem.toBytes(global_nonce));
 
     try lib.msdkTry(msdk.MXC_FLC_PageErase(address));
-    try lib.msdkTry(msdk.MXC_FLC_Write(address, data.len, @ptrCast(@alignCast(&data))));
+    try lib.msdkTry(msdk.MXC_FLC_Write(address, @sizeOf(@TypeOf(global_nonce)), @ptrCast(&global_nonce)));
+    try lib.msdkTry(msdk.MXC_FLC_Write(address + @sizeOf(@TypeOf(global_nonce)), bytes.len, @ptrCast(@alignCast(bytes.ptr))));
 }
 
 pub fn saveSubscriptions(channel_index: u3) !void {
@@ -91,7 +90,7 @@ pub fn saveSubscriptions(channel_index: u3) !void {
     try write(flash_start_address, std.mem.asBytes(&meta));
 
     const addr = flash_start_address + msdk.MXC_FLASH_PAGE_SIZE * (@as(usize, channel_index) + 1);
-    try write(addr, std.mem.asBytes(&root.subscriptions[channel_index].?));
+    try write(addr, root.subscriptions[channel_index].?.asBytes());
 }
 
 const PageMeta = extern struct {
