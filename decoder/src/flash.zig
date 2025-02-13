@@ -11,9 +11,9 @@
 const std = @import("std");
 const msdk = @import("msdk");
 const lib = @import("lib");
-const root = @import("root");
 const secrets = @import("secrets");
 
+const main = @import("main.zig");
 const messaging = @import("messaging.zig");
 
 /// Interrupt Request handler
@@ -59,7 +59,7 @@ pub fn init() !void {
     for (meta.valid, 1..) |valid, i| if (valid) {
         var subscription_bytes: lib.Subscription.Bytes = undefined;
         read(flash_start_address + (i * msdk.MXC_FLASH_PAGE_SIZE), &subscription_bytes);
-        root.subscriptions[i - 1] = lib.Subscription.init(
+        main.subscriptions[i - 1] = lib.Subscription.init(
             subscription_bytes.channel_id,
             subscription_bytes.start,
             subscription_bytes.end,
@@ -119,7 +119,7 @@ fn write(address: usize, bytes: []u8) !void {
 pub fn saveSubscriptions(channel_index: u3) !void {
     // Create the metadata storing which subscriptions are active
     var meta = FlashMeta{};
-    for (root.subscriptions, 0..) |subscription, i| if (subscription) |_| {
+    for (main.subscriptions, 0..) |subscription, i| if (subscription) |_| {
         meta.valid[i] = true;
     };
 
@@ -128,7 +128,7 @@ pub fn saveSubscriptions(channel_index: u3) !void {
 
     // Write the subscription to the right page in flash
     const addr = flash_start_address + msdk.MXC_FLASH_PAGE_SIZE * (@as(usize, channel_index) + 1);
-    try write(addr, root.subscriptions[channel_index].?.asBytes());
+    try write(addr, main.subscriptions[channel_index].?.asBytes());
 }
 
 const FlashMeta = extern struct {

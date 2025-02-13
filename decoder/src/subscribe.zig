@@ -1,11 +1,11 @@
 //! Subscribe command
 
 const std = @import("std");
-const root = @import("root");
 const lib = @import("lib");
 const secrets = @import("secrets");
 const ed25519 = @import("ed25519");
 
+const main = @import("main.zig");
 const flash = @import("flash.zig");
 const messaging = @import("messaging.zig");
 
@@ -34,9 +34,9 @@ const SubscribeHeader = extern struct {
 pub fn execute(body: []u8) !void {
     const message = try SubscribeHeader.fromBytes(body);
 
-    const channel_index = try root.getChannelIndex(message.channel_id);
-    if (root.subscriptions[channel_index]) |*subscription| subscription.deinit();
-    root.subscriptions[channel_index] = lib.Subscription.init(
+    const channel_index = try main.getChannelIndex(message.channel_id);
+    if (main.subscriptions[channel_index]) |*subscription| subscription.deinit();
+    main.subscriptions[channel_index] = lib.Subscription.init(
         message.channel_id,
         message.start,
         message.end,

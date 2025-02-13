@@ -5,9 +5,9 @@
 //! https://rules.ectf.mitre.org/2025/specs/detailed_specs.html#decoder-interface
 
 const std = @import("std");
-const root = @import("root");
 const msdk = @import("msdk");
 
+const main = @import("main.zig");
 const flash = @import("flash.zig");
 const uart = @import("uart.zig");
 

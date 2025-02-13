@@ -1,11 +1,11 @@
 //! Decode command
 
 const std = @import("std");
-const root = @import("root");
 const ed25519 = @import("ed25519");
 const lib = @import("lib");
 const secrets = @import("secrets");
 
+const main = @import("main.zig");
 const messaging = @import("messaging.zig");
 
 /// The maximum size of a Decode body we expect
@@ -62,11 +62,11 @@ pub fn execute(body: []u8) !void {
         return error.DecreasingTimestamp;
 
     if (decode.channel_id != 0) {
-        const channel_index = try root.getChannelIndex(decode.channel_id);
+        const channel_index = try main.getChannelIndex(decode.channel_id);
 
         // Try to get the subscription corresponding to the `channel_id` from
         // the message
-        var subscription = &(root.subscriptions[channel_index] orelse return error.NoSubscription);
+        var subscription = &(main.subscriptions[channel_index] orelse return error.NoSubscription);
 
         if (!subscription.includes(decode.timestamp))
             return error.NotInSubscriptionTimeRange;

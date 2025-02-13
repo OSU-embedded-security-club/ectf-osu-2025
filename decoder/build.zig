@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     const decoder_exe = b.addExecutable(.{
-        .root_source_file = b.path("main.zig"),
+        .root_source_file = b.path("src/main.zig"),
         .single_threaded = true,
         .target = target,
         .name = "main",
@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     const unit_tests = b.addTest(.{
-        .root_source_file = b.path("lib/main.zig"),
+        .root_source_file = b.path("src/lib/main.zig"),
         .target = b.resolveTargetQuery(.{}),
         .link_libc = true,
     });
@@ -145,7 +145,7 @@ pub fn build(b: *std.Build) !void {
     }
 
     const lib_module = b.createModule(.{
-        .root_source_file = b.path("lib/main.zig"),
+        .root_source_file = b.path("src/lib/main.zig"),
     });
 
     decoder_exe.root_module.addOptions("secrets", options);
@@ -162,7 +162,7 @@ pub fn build(b: *std.Build) !void {
 
     const docs = b.addObject(.{
         .name = "main",
-        .root_source_file = b.path("lib/main.zig"),
+        .root_source_file = b.path("src/lib/main.zig"),
         .target = target,
         .optimize = .Debug,
     });

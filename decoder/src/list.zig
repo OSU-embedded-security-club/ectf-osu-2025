@@ -1,8 +1,8 @@
 //! List command
 
 const std = @import("std");
-const root = @import("root");
 
+const main = @import("main.zig");
 const messaging = @import("messaging.zig");
 
 /// A single entry in the list response of subscriptions
@@ -24,7 +24,7 @@ const ListChannelResponse = extern struct {
     pub fn init() ListChannelResponse {
         var self = ListChannelResponse{};
 
-        for (root.subscriptions) |subscription| if (subscription) |sub| {
+        for (main.subscriptions) |subscription| if (subscription) |sub| {
             self.subscriptions[self.num_channels] = SubscriptionEntry{
                 .channel_id = sub.serialized.channel_id,
                 .start = sub.serialized.start,
