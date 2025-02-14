@@ -143,15 +143,33 @@ See @signature on how the design protects against the attack scenario.
 
 == Secrets
 
-The following secrets are generated for a deployment. Once generated, they are global and read only. The deployment secrets are available to the encoder.
+The following secrets are generated for a deployment. Once generated, they are global and read only. The deployment secrets are available to the encoder. Some of these secrets will be shared with the Decoders in various forms as described by @decoder.
 
-- A 32 byte seed per encrypted channel $S_"channel_id"$
-- A 64 byte subscription salt, $S_"subscription"$
-- An Ed25519 asymmetric key pair, secret key $S K$ and public key $P K$
+- $S_1, ..., S_8$
+  - Up to 8 32 byte randomly generated seeds, one per encrypted channel
+- $S_"subscription"$
+  - Randomly generated 64 byte subscription salt
+- $K_"secret", K_"public"$
+  - An Ed25519 asymmetric key pair
+- $K_"metadata"$
+  - Randomly generated 32 byte shared symmetric key
 
-== Decoder
+== Decoder <decoder>
 
-The firmware must be built for each separate decoder device. When building, specify the `DEVICE_ID` environment variable as a 4 byte hexadecimal number starting with `0x`.
+The firmware must be built for each separate decoder device. When building, specify the `DEVICE_ID` environment variable as a 4 byte hexadecimal number starting with `0x`, denoted as $D_"id"$.
+
+At build time, the decoder gathers the following secrets and stores them within the encrypted firmware:
+
+- $K_"metadata"$
+  - Shared 32 byte symmetric key with the Encoder which is used to encrypt the metadata (timestamp, channel id), and
+- $K_"public"$
+  - Shared public key with the Encoder
+- $K_"subscription"$
+  - Derived as $"blake3"(S_"subscription"+D_"id")$, and is the key used to decrypt subscriptions
+- $C_1, ..., C_8$
+  - List of up to 8 Channel IDs which the decoder was provisioned with
+- $K_"flash"$
+  - Randomly generated 32 byte symmetric used to encrypt data before writing it to the flash storage
 
 = System Design
 
@@ -184,7 +202,9 @@ The firmware must be built for each separate decoder device. When building, spec
   caption: [Structure of a decode packet],
 )
 
-Each frame has an integer timestamp $t in [0, 2^64 - 1]$. Each timestamp has a unique symmetric key $k_t$ which the encoder will use to encrypt the message, and the decoder will use to decrypt the message, both using Salsa20. The keys are derived with a _binary hash key derivation tree_. Let $H$ be a cryptographic hash function. We have chosen $H="blake3"$. Let $L$ and $R$ be salted hash functions $L(x)=H(x + #quote(math.upright("L")))$ and $R(x)=H(x+#quote(math.upright("R")))$. The encoder uses secret $S_"channel_id"$ for the channel id currently being broadcasted, and generates a root hash $h=H(S)$. Then, two hashes $h_0=L(h)$ and $h_1=R(h)$ are derived. Then $h_00=L(h_0)$, $h_01=R(h_0)$, $h_10=L(h_1)$, and $h_11=R(h_1)$, and so on. This process continues to form a tree of height $64$. The leaves of the tree form the keys $k_t$, one for every timestamp. @hash-key-derivation-tree shows a hash key derivation tree for $t in [0, 7]$ and has $8$ leaves. Note that the full sized tree has $2^64$ leaves, the leaves are computed on demand for particular timestamps since it would be computationally infeasible to precompute all keys for such a large tree.
+The plaintext contents _Channel ID_, _Timestamp_, and _Message_ are signed with $K_"private"$ to form the _Signature_ which is prepended to the data. Then, those three fields are encrypted with the symmetric $K_"metadata"$ key using the first 8 bytes of _Signature_ as a nonce, which forms the final decode packet.
+
+Each frame has an integer timestamp $t in [0, 2^64 - 1]$. Each timestamp has a unique symmetric key $k_t$ which the encoder will use to encrypt the _Message_, and the decoder will use to decrypt the _Message_, both using Salsa20. Note that this key is on top of $k_"metadata"$ which is used to encrypt the entire packet payload. The keys are derived with a _binary hash key derivation tree_. Let $H$ be a cryptographic hash function. We have chosen $H="blake3"$. Let $L$ and $R$ be salted hash functions $L(x)=H(x + #quote(math.upright("L")))$ and $R(x)=H(x+#quote(math.upright("R")))$. The encoder uses secret $S_"channel_id"$ for the channel id currently being broadcasted, and generates a root hash $h=H(S)$. Then, two hashes $h_0=L(h)$ and $h_1=R(h)$ are derived. Then $h_00=L(h_0)$, $h_01=R(h_0)$, $h_10=L(h_1)$, and $h_11=R(h_1)$, and so on. This process continues to form a tree of height $64$. The leaves of the tree form the keys $k_t$, one for every timestamp. @hash-key-derivation-tree shows a hash key derivation tree for $t in [0, 7]$ and has $8$ leaves. Note that the full sized tree has $2^64$ leaves, the leaves are computed on demand for particular timestamps since it would be computationally infeasible to precompute all keys for such a large tree.
 
 #figure(
   align(
@@ -266,27 +286,26 @@ This aspect of the design secures the system in the following ways:
       columns: 3,
       align: left,
       table.header([Field Name], [Size], [Relative Size]),
-      [Channel ID], [2 bytes], bytesize(2),
+      [Signature], [64 bytes], bytesize(64),
       [Start Timestamp], [8 bytes], bytesize(8),
       [End Timestamp], [8 bytes], bytesize(8),
-      [Packed Subtree Root Hashes],
-      ${24n "bytes" | n in NN^+, n <= 126 }$,
+      [Channel ID], [2 bytes], bytesize(2),
+      [Root Hashes],
+      ${24n "bytes" | n <= 126 }$,
       box(box(bytesize(24)) + " " + box($...n "times"$)),
     ),
   ),
   caption: [Structure of a subscribe packet],
 )
 
+The plaintext contents _Start Timestamp_, _End Timestamp_, _Channel ID_, and _Root Hashes_ are signed with $K_"private"$ to form the _Signature_ which is prepended to the data. Then, those four fields are encrypted with $K_"subscription"$ using the first 8 bytes of _Signature_ as a nonce, which forms the final subscribe packet. This ensures that subscriptions can only be used by the decoder the subscription was generated for.
+
 The decoder runs the same algorithm using the start and end timestamps as the encoder to figure out where the subtree root hashes are, so no extra metadata is required to positions the hashes, or to know how many there are.
-
-#let ksub = $k_"subscription"$
-
-The entire subscription payload is symmetricly encrypted using Salsa20 with a key $#ksub =H(S + "DEVICE_ID")$. #ksub is stored within the decoder as a static variable in the `.rodata` section when it is provisioned and can be used to decrypt a subscription. This ensures that subscriptions can only be used by the decoder the subscription was generated for.
 
 This aspect of the design secures the system in the following ways:
 
 - @as2[Pirated Subscription]
-  - Encrypting the subscription file with #ksub means that an attacker needs physical access to the decoder which a subscription was generated for. In the Pirated Subscription scenario, the attacker is given a subscription file for a device id which they do not have, so it is not possible to extract the key and decrypt the subscription to apply it to the attacker's own decoder.
+  - Encrypting the subscription file with $K_"subscription"$ means that an attacker needs physical access to the decoder which a subscription was generated for. Additionally, signing the subscription with asymmetric cryptography ensures that further subscriptions are created by the encoder and cannot be forged by other decoders. In the Pirated Subscription scenario, the attacker is given a subscription file for a device id which they do not have, so it is not possible to extract the key and decrypt the subscription to apply it to the attacker's own decoder.
 
 == Signatures <signature>
 
@@ -307,6 +326,12 @@ This aspect of the design secures the system in the following ways:
 
 - @sr3[Increasing Timestamps]
   - The timestamp can be checked against the timestamp in the frame before attempting to decode the data in frame, ensuring that the decoder never decodes an earlier frame.
+
+== Memory Protection Unit
+
+== Encryption at Rest
+
+Before writing to flash, the contents of the page are first encrypted with a symmetric key $K_"flash"$ using Salsa20. $K_"flash"$ created by the decoder at build time and stored within the encrypted firmware (see @decoder). An incrementing nonce is stored next to each page in plaintext, to prevent nonce reuse. This adds another layer of security aiming to prevent offline attacks where a sophisticated attacker is able to dump the flash of the decoder and brute force the subscription's root hashes.
 
 == Zig
 
