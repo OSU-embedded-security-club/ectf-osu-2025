@@ -55,11 +55,12 @@ pub const SendOpcode = enum {
     }
 };
 
+/// Representation of a header in the host messaging format
 const Header = struct {
     opcode: SendOpcode,
     length: u16 = 0,
 
-    /// Convert this header into the wire format
+    /// Serialize this header into the wire format
     pub fn asBytes(self: Header) [4]u8 {
         const len: u16 = @truncate(self.length);
         return [4]u8{ magic, self.opcode.toByte(), @truncate(len), @truncate(len >> 8) };
@@ -107,7 +108,7 @@ pub fn sendAck() void {
     uart.writeBytes(&packet.asBytes());
 }
 
-/// Temporary storage for
+/// Temporary buffer for the formatter to write to for `sendDebug` and `sendError`
 var message_buffer: [64]u8 = undefined;
 
 /// Send a Debug message to the host

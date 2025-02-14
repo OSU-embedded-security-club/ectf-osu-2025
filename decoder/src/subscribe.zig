@@ -1,4 +1,4 @@
-//! Subscribe command
+//! Update Subscription command
 
 const std = @import("std");
 const lib = @import("lib");
@@ -9,36 +9,60 @@ const main = @import("main.zig");
 const flash = @import("flash.zig");
 const messaging = @import("messaging.zig");
 
+/// The maximum size of a Subscribe body we expect
 pub const max_message_size = @sizeOf(SubscribeHeader) + @sizeOf(lib.Subscription.Bytes);
 
+/// The header of a Subscribe message
 const SubscribeHeader = extern struct {
+    /// Ed25519 signature over the plaintext contents
     signature: [64]u8 align(1),
+
+    /// End timestamp
     start: u64 align(1),
+
+    /// Start timestamp
     end: u64 align(1),
+
     channel_id: u16 align(1),
 
+    /// Given a slice of bytes `body`, check that it is a valid Subscription
+    /// message, and return a pointer to it into the body
     pub fn fromBytes(bytes: []u8) !*const SubscribeHeader {
+        // Make sure that `bytes` is a reasonable size
         if (bytes.len < @sizeOf(SubscribeHeader) + @offsetOf(lib.Subscription.Bytes, "root_hashes") or bytes.len > max_message_size)
             return error.InvalidBody;
 
         const self: *const SubscribeHeader = @ptrCast(bytes.ptr);
 
-        const data = bytes[@offsetOf(SubscribeHeader, "start")..];
+        // The `start`, `end`, and `channel_id` fields are encrypted with the
+        // shared `subscription_key` between the encoder and decoder.
+        // Before we continue, we must decrypt the subscription. The nonce is
+        // the first 8 bytes of the signature
         const nonce = self.signature[0..8];
-        std.crypto.stream.salsa.Salsa20.xor(data, data, 0, secrets.subscription_key, nonce.*);
+        const message = bytes[@offsetOf(SubscribeHeader, "start")..];
+        std.crypto.stream.salsa.Salsa20.xor(message, message, 0, secrets.subscription_key, nonce.*);
 
-        const valid = ed25519.ed25519_verify(&self.signature, data.ptr, data.len, &secrets.public_key);
+        // The asymmetric signature is verified over the plaintext contents.
+        // This ensures that the message came from the encoder it was
+        // provisioned with
+        const valid = ed25519.ed25519_verify(&self.signature, message.ptr, message.len, &secrets.public_key);
         if (valid == 0) return error.InvalidSignature;
 
         return self;
     }
 };
 
+/// Attempt to add the subscription
 pub fn execute(body: []u8) !void {
     const message = try SubscribeHeader.fromBytes(body);
 
     const channel_index = try main.getChannelIndex(message.channel_id);
+
+    // If an old subscription for this channel existed, remove it, since we will
+    // override it with a newer one
     if (main.subscriptions[channel_index]) |*subscription| subscription.deinit();
+
+    // Create the subscription for the channel
     main.subscriptions[channel_index] = lib.Subscription.init(
         message.channel_id,
         message.start,
@@ -46,7 +70,7 @@ pub fn execute(body: []u8) !void {
         body[@sizeOf(SubscribeHeader)..],
     );
 
-    try flash.saveSubscriptions(@truncate(channel_index));
+    try flash.saveSubscriptions(channel_index);
 
     try messaging.sendWithAcks(.Subscribe, &.{});
 }

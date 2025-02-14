@@ -14,7 +14,7 @@ pub const max_message_size = @sizeOf(Decode);
 /// The last timestamp we have successfully decoded
 var last_timestamp: ?u64 = null;
 
-/// The decode message which
+/// A Decode message
 const Decode = extern struct {
     /// Ed25519 signature over the plaintext contents
     signature: [64]u8 align(1),
@@ -25,20 +25,20 @@ const Decode = extern struct {
     /// Up to 64 byte message
     message: [64]u8 align(1),
 
-    /// Given a slice of bytes `body`, check that it is a valid Decode message,
+    /// Given a slice of bytes `bytes`, check that it is a valid Decode message,
     /// and return a pointer to it into the body
     pub fn fromBytes(bytes: []u8) !*Decode {
-        // Make sure that `body` is a correct size, accounting for the fact that
+        // Make sure that `bytes` is a correct size, accounting for the fact that
         // the message is variable width
         if (bytes.len < @offsetOf(Decode, "message") or bytes.len > @sizeOf(Decode))
             return error.InvalidBody;
 
         const self: *Decode = @ptrCast(bytes.ptr);
 
-        // The `channel_id`, `timestamp`, and `message` are encrypted with a
-        // shared `metadata_key` between the encoder and decoder. Before we
-        // continue, we must decrypt the metadata. The nonce is the first 8
-        // bytes of the signature
+        // The `channel_id`, `timestamp`, and `message` fields are encrypted
+        // with the shared `metadata_key` between the encoder and decoder.
+        // Before we continue, we must decrypt the metadata. The nonce is the
+        // first 8 bytes of the signature
         const nonce = self.signature[0..8];
         const message = bytes[@offsetOf(Decode, "channel_id")..];
         std.crypto.stream.salsa.Salsa20.xor(message, message, 0, secrets.metadata_key, nonce.*);

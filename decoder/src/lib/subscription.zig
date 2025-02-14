@@ -14,15 +14,31 @@ pub const Subscription = struct {
     /// a Update Subscription message, reading from flash, and writing to flash
     pub const Bytes = extern struct {
         channel_id: u16,
+
+        /// Start timestamp
         start: u64,
+
+        /// End timestamp
         end: u64,
+
+        /// Up to 126, 24 byte root hashes
         root_hashes: [126][24]u8 = undefined,
     };
 
+    /// Underlying serializable bytes
     serialized: *Bytes,
+
+    /// Up to 126 precomputed root positions (calculated from start and end)
     roots: []RootPosition = undefined,
+
+    /// Up to 65 hashes used as a cache to minimize the number of hashes
+    /// required to get a key for a timestamp
     cached_hashes: [][24]u8 = undefined,
+
+    /// Which root the cache is currently on
     root_index: isize = -1,
+
+    /// The last timestamp that this channel has decoded, used by the cache
     last_timestamp: u64 = 0,
 
     /// Get the underlying bytes of this `Subscription`
@@ -78,6 +94,8 @@ pub const Subscription = struct {
         var start = self.serialized.start;
 
         while (start <= self.serialized.end) {
+            // Choose the largest power that fits in the alignment of the
+            // current `start`, without overflowing beyond the end
             const power = @min(@as(u6, @intCast(@bitSizeOf(u64) - 1 - @clz(self.serialized.end - start + 1))), @ctz(start));
 
             self.roots[index] = RootPosition{ .offset = start, .power = power };
