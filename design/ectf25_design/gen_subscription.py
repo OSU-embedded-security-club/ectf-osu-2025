@@ -27,11 +27,23 @@ RIGHT_SALT = b"R"
 
 
 def hash(data: bytes):
+    """Hash the data using blake3, truncating the result to 24 bytes."""
     return blake3(data).digest(length=24)
 
 
 @dataclass(frozen=True)
 class Root:
+    """
+    The position of a node in the hash key derivation tree.
+
+    Offset is the starting timestamp of the node.
+    Power is its position vertically. A power of 0 means a node at the bottom of a tree (representing an individual timestamp's key),
+    and a power of 64 is at the top (representing the entire range of timestamps).
+
+    A node's offset is always a multiple of 2**power.
+
+    Knowing the value of a hash at a root allows one to compute timestamps in the range [offset, offset+2**power - 1] (inclusive).
+    """
     offset: int
     power: int
 
@@ -51,16 +63,25 @@ def gen_subscription(
     """
 
     secrets = json.loads(secrets)
-    seed = bytes.fromhex(secrets["seeds"][str(channel)])
     subscription_salt = bytes.fromhex(secrets["subscription_salt"])
-    signer = eddsa.new(ECC.import_key(secrets["private_key"]), "rfc8032")
+
+    # Compute the key used to encrypt subscriptions for this device, which depends on the secret subscription_salt and the device id.
+    # This key was also computed when the decoder was built and embedded in the firmware, so that the device can decrypt the message.
     subscription_key = blake3(f"{subscription_salt.hex()}{device_id:08x}".encode()).digest()
 
+    # Get the root node of the hash tree for this channel.
+    seed = bytes.fromhex(secrets["seeds"][str(channel)])
+
+    # Compute the positions of the nodes in the tree needed for decrypting nodes within the timestamp range.
+    # We only need to send the hash values at these positions, and don't need to send any metadata about where they are in the tree,
+    # since the decoder has a copy of this algorithm and can calculate the positions based on the start and end timestamps.
     roots = get_roots(start, end)
 
+    # For each root position, compute the value of the tree at that position.
     hashes = []
     for root in roots:
         curr = seed
+        # Loop from the top of the tree, down to the root, calculating the left or right hash based on the bits in the root's offset.
         for i in range(HASH_TREE_HEIGHT, root.power - 1, -1):
             if root.offset & (1 << i) == 0:
                 curr = hash(curr + LEFT_SALT)
@@ -69,24 +90,46 @@ def gen_subscription(
         hashes.append(curr)
 
     plaintext_body = struct.pack("<QQH", start, end, channel) + b''.join(hashes)
+
+    # Sign the message using the private key.
+    signer = eddsa.new(ECC.import_key(secrets["private_key"]), "rfc8032")
     signature = signer.sign(plaintext_body)
+
+    # Encrypt it using the device's subscription key. The nonce is the first 8 bytes of the signature
+    # since that is a random value which the decoder can know without us including any additional data in our message.
     encrypted_body = Salsa20.new(key=subscription_key, nonce=signature[0:8]).encrypt(plaintext_body)
 
     return signature + encrypted_body
 
 def ctz(x: int) -> int:
+    """
+    Compute the number of trailing 0s in the binary representation of x.
+    This is the maximum `power` of a root that starts at x,
+    since it is requirement that `offset` is a multiple of `2**power`.
+    """
+    # If x == 0, we can use a node all the way up to the top of the tree (power = 64).
     if x == 0:
         return HASH_TREE_HEIGHT
+    # x & -x isolates the lowest set bit of x. Subtracting 1 creates a mask where all bits lower than the
+    # lowest set bit of x are set to 1, and bit count returns the number of 1s in that mask.
     return ((x & -x) - 1).bit_count()
 
 
 def get_roots(a: int, b: int) -> list[Root]:
+    """
+    Compute the positions of the smallest set of roots that allows the computation of all keys
+    within the range of timestamps [a, b] (inclusive), but none outside of that range.
+    The appendix in the design document proves that the length of the result is at most 126.
+    """
+
     if a > b:
         raise ValueError("Invalid range: a > b")
 
     ranges = []
 
     while a <= b:
+        # `ctz(a)` is the largest the power can be due to the alignment of `a`.
+        # Also, we need `a + 2**power - 1 <= b` so the range doesn't go too long, hence `power <= (b - a + 1).bit_length() - 1`.
         power = min((b - a + 1).bit_length() - 1, ctz(a))
         ranges.append(Root(power=power, offset=a))
         a += 1 << power

@@ -24,6 +24,7 @@ RIGHT_SALT = b"R"
 
 
 def hash(data: bytes):
+    """Hash the data using blake3, truncating the result to 24 bytes."""
     return blake3(data).digest(length=24)
 
 
@@ -67,8 +68,12 @@ class Encoder:
         :returns: The encoded frame, which will be sent to the Decoder
         """
         if channel == 0:
+            # Channel 0 does not need a subscription, so it is not encrypted using the hash tree.
             message = struct.pack("<HQ", channel, timestamp) + frame
         else:
+            # Compute this timestamp's encryption key by starting at the top of the tree with the
+            # channel's seed value, and going down the tree by taking the left or right hash
+            # based on the bits of the timestamp.
             curr = self.seeds[channel]
             for i in range(HASH_TREE_HEIGHT, -1, -1):
                 if timestamp & (1 << i) == 0:
@@ -76,11 +81,18 @@ class Encoder:
                 else:
                     curr = hash(curr + RIGHT_SALT)
 
+            # Encrypt the message using the computed key (extended from 24 to 32 bytes).
+            # Since each key is only once, it is okay to have an all-zero nonce.
             encrypted_frame = Salsa20.new(key=curr+curr[:8], nonce=bytes([0 for _ in range(8)])).encrypt(frame)
 
             message = struct.pack("<HQ", channel, timestamp) + encrypted_frame
 
+        # Sign the message using the private key.
         signature = self.signer.sign(message)
+
+        # Encrypt the message again using the metadata key so that the channel and timestamp are also encrypted.
+        # The nonce is the first 8 bytes of the signature since that is a random value which the decoder can
+        # know without us including any additional data in our message.
         return signature + Salsa20.new(key=self.metadata_key, nonce=signature[0:8]).encrypt(message)
 
 
