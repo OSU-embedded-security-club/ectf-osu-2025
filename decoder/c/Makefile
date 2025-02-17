@@ -242,9 +242,7 @@ MXC_OPTIMIZE_CFLAGS ?= -O2
 
 # Set compiler flags
 PROJ_CFLAGS += -Wall -Wno-main -Wno-unused-variable -Wno-unused-const-variable -Wno-unused-function -Wno-unused-but-set-variable -Wno-incompatible-pointer-types # Enable warnings
-PROJ_CFLAGS+=-DDECODER_ID=$(DECODER_ID)
 PROJ_CFLAGS += -DMXC_ASSERT_ENABLE
-# eCTF Crypto Example - WolfSSL Flags
 
 ifeq ($(POST_BOOT_ENABLED), 1)
 	PROJ_CFLAGS += -DPOST_BOOT=$(POST_BOOT_CODE)

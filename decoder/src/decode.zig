@@ -19,7 +19,11 @@ const Decode = extern struct {
     /// Ed25519 signature over the plaintext contents
     signature: [64]u8 align(1),
 
-    channel_id: u16 align(1),
+    /// 0 means channel 0, otherwise `channel_index - 1` is an index into the
+    /// global `subscriptions` array of channels
+    channel_index: u8 align(1),
+
+    /// Timestamp of this decode message
     timestamp: u64 align(1),
 
     /// Up to 64 byte message
@@ -28,20 +32,23 @@ const Decode = extern struct {
     /// Given a slice of bytes `bytes`, check that it is a valid Decode message,
     /// and return a pointer to it into the body
     pub fn fromBytes(bytes: []u8) !*Decode {
-        // Make sure that `bytes` is a correct size, accounting for the fact that
-        // the message is variable width
+        // Make sure that `bytes` is a correct size, accounting for the fact
+        // that the message is variable width
         if (bytes.len < @offsetOf(Decode, "message") or bytes.len > @sizeOf(Decode))
             return error.InvalidBody;
 
         const self: *Decode = @ptrCast(bytes.ptr);
 
-        // The `channel_id`, `timestamp`, and `message` fields are encrypted
+        // The `channel_index`, `timestamp`, and `message` fields are encrypted
         // with the shared `metadata_key` between the encoder and decoder.
         // Before we continue, we must decrypt the metadata. The nonce is the
         // first 8 bytes of the signature
         const nonce = self.signature[0..8];
-        const message = bytes[@offsetOf(Decode, "channel_id")..];
+        const message = bytes[@offsetOf(Decode, "channel_index")..];
         std.crypto.stream.salsa.Salsa20.xor(message, message, 0, secrets.metadata_key, nonce.*);
+
+        // Assert that the channel index is valid
+        _ = try main.getChannelId(self.channel_index);
 
         // The asymmetric signature is verified over the plaintext contents.
         // This ensures that the message came from the encoder it was
@@ -61,12 +68,10 @@ pub fn execute(body: []u8) !void {
     if (last_timestamp) |t| if (decode.timestamp <= t)
         return error.DecreasingTimestamp;
 
-    if (decode.channel_id != 0) {
-        const channel_index = try main.getChannelIndex(decode.channel_id);
-
+    if (decode.channel_index != 0) {
         // Try to get the subscription corresponding to the `channel_id` from
         // the message
-        var subscription = &(main.subscriptions[channel_index] orelse return error.NoSubscription);
+        var subscription = &(main.subscriptions[decode.channel_index - 1] orelse return error.NoSubscription);
 
         if (!subscription.includes(decode.timestamp))
             return error.NotInSubscriptionTimeRange;

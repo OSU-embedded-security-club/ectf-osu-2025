@@ -23,7 +23,9 @@ const SubscribeHeader = extern struct {
     /// Start timestamp
     end: u64 align(1),
 
-    channel_id: u16 align(1),
+    /// 0 means channel 0, otherwise `channel_index - 1` is an index into
+    /// the global `subscriptions` array of channels
+    channel_index: u8 align(1),
 
     /// Given a slice of bytes `body`, check that it is a valid Subscription
     /// message, and return a pointer to it into the body
@@ -34,13 +36,16 @@ const SubscribeHeader = extern struct {
 
         const self: *const SubscribeHeader = @ptrCast(bytes.ptr);
 
-        // The `start`, `end`, and `channel_id` fields are encrypted with the
+        // The `start`, `end`, and `channel_index` fields are encrypted with the
         // shared `subscription_key` between the encoder and decoder.
         // Before we continue, we must decrypt the subscription. The nonce is
         // the first 8 bytes of the signature
         const nonce = self.signature[0..8];
         const message = bytes[@offsetOf(SubscribeHeader, "start")..];
         std.crypto.stream.salsa.Salsa20.xor(message, message, 0, secrets.subscription_key, nonce.*);
+
+        // Assert that the channel index is valid
+        _ = try main.getChannelId(self.channel_index);
 
         // The asymmetric signature is verified over the plaintext contents.
         // This ensures that the message came from the encoder it was
@@ -56,15 +61,16 @@ const SubscribeHeader = extern struct {
 pub fn execute(body: []u8) !void {
     const message = try SubscribeHeader.fromBytes(body);
 
-    const channel_index = try main.getChannelIndex(message.channel_id);
+    // The channel index has already been verified to fit in a u4 at this point
+    const channel_index: u4 = @truncate(message.channel_index);
 
     // If an old subscription for this channel existed, remove it, since we will
     // override it with a newer one
-    if (main.subscriptions[channel_index]) |*subscription| subscription.deinit();
+    if (main.subscriptions[channel_index - 1]) |*subscription| subscription.deinit();
 
     // Create the subscription for the channel
-    main.subscriptions[channel_index] = lib.Subscription.init(
-        message.channel_id,
+    main.subscriptions[channel_index - 1] = lib.Subscription.init(
+        channel_index,
         message.start,
         message.end,
         body[@sizeOf(SubscribeHeader)..],

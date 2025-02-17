@@ -26,11 +26,6 @@ LEFT_SALT = b"L"
 RIGHT_SALT = b"R"
 
 
-def hash(data: bytes):
-    """Hash the data using blake3, truncating the result to 24 bytes."""
-    return blake3(data).digest(length=24)
-
-
 @dataclass(frozen=True)
 class Root:
     """
@@ -62,6 +57,9 @@ def gen_subscription(
     :param channel: Channel to enable
     """
 
+    if channel == 0:
+        raise ValueError("`channel` must not be 0")
+
     secrets = json.loads(secrets)
     subscription_salt = bytes.fromhex(secrets["subscription_salt"])
 
@@ -70,7 +68,7 @@ def gen_subscription(
     subscription_key = blake3(f"{subscription_salt.hex()}{device_id:08x}".encode()).digest()
 
     # Get the root node of the hash tree for this channel.
-    seed = bytes.fromhex(secrets["seeds"][str(channel)])
+    channel_index, seed = next((i + 1, bytes.fromhex(v)) for i, (k, v) in enumerate(secrets["seeds"].items()) if k == str(channel))
 
     # Compute the positions of the nodes in the tree needed for decrypting nodes within the timestamp range.
     # We only need to send the hash values at these positions, and don't need to send any metadata about where they are in the tree,
@@ -84,12 +82,12 @@ def gen_subscription(
         # Loop from the top of the tree, down to the root, calculating the left or right hash based on the bits in the root's offset.
         for i in range(HASH_TREE_HEIGHT, root.power - 1, -1):
             if root.offset & (1 << i) == 0:
-                curr = hash(curr + LEFT_SALT)
+                curr = blake3(curr + LEFT_SALT).digest(length=24)
             else:
-                curr = hash(curr + RIGHT_SALT)
+                curr = blake3(curr + RIGHT_SALT).digest(length=24)
         hashes.append(curr)
 
-    plaintext_body = struct.pack("<QQH", start, end, channel) + b''.join(hashes)
+    plaintext_body = struct.pack("<QQB", start, end, channel_index) + b''.join(hashes)
 
     # Sign the message using the private key.
     signer = eddsa.new(ECC.import_key(secrets["private_key"]), "rfc8032")

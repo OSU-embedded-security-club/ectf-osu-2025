@@ -15,13 +15,15 @@ pub const decode = @import("decode.zig");
 /// Global list of up to 8 subscriptions
 pub var subscriptions = [8]?lib.Subscription{ null, null, null, null, null, null, null, null };
 
-/// Validate a `channel_id` is one which this decoder was provisioned for, and
-/// get the index into the global `subscriptions` array for it
-pub fn getChannelIndex(channel_id: u16) DecoderError!u3 {
-    inline for (secrets.channel_ids, 0..) |id, i| {
-        if (channel_id == id) return i;
-    }
-    return error.UnknownChannelId;
+/// Validate a `channel_index` corresponds to a channel id which this decoder
+/// was provisioned for, and return it
+pub fn getChannelId(channel_index: usize) DecoderError!u32 {
+    if (channel_index == 0) return 0;
+
+    if (channel_index > secrets.channel_ids.len)
+        return error.UnknownChannelId;
+
+    return secrets.channel_ids[channel_index - 1];
 }
 
 /// The size of the biggest possible message we expect

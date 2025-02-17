@@ -59,8 +59,12 @@ pub fn init() !void {
     for (meta.valid, 1..) |valid, i| if (valid) {
         var subscription_bytes: lib.Subscription.Bytes = undefined;
         read(flash_start_address + (i * msdk.MXC_FLASH_PAGE_SIZE), &subscription_bytes);
+
+        // Assert that the channel index is valid
+        _ = try main.getChannelId(subscription_bytes.channel_index);
+
         main.subscriptions[i - 1] = lib.Subscription.init(
-            subscription_bytes.channel_id,
+            @truncate(subscription_bytes.channel_index),
             subscription_bytes.start,
             subscription_bytes.end,
             std.mem.asBytes(&subscription_bytes.root_hashes),
@@ -120,7 +124,7 @@ fn write(address: usize, bytes: []u8) !void {
 /// This incurs 2 flash writes, one to the page storing the metadata about which
 /// channels have valid subscriptions, and one to the page for that particular
 /// subscription
-pub fn saveSubscriptions(channel_index: u3) !void {
+pub fn saveSubscriptions(channel_index: u4) !void {
     // Create the metadata storing which subscriptions are active
     var meta = FlashMeta{};
     for (main.subscriptions, 0..) |subscription, i| if (subscription) |_| {
@@ -131,10 +135,12 @@ pub fn saveSubscriptions(channel_index: u3) !void {
     try write(flash_start_address, std.mem.asBytes(&meta));
 
     // Write the subscription to the right page in flash
-    const addr = flash_start_address + msdk.MXC_FLASH_PAGE_SIZE * (@as(usize, channel_index) + 1);
-    try write(addr, main.subscriptions[channel_index].?.asBytes());
+    const addr = flash_start_address + msdk.MXC_FLASH_PAGE_SIZE * @as(usize, channel_index);
+    try write(addr, main.subscriptions[channel_index - 1].?.asBytes());
 }
 
+/// Metadata page stored in flash which identifies what other flash pages have
+/// valid subscriptions in them
 const FlashMeta = extern struct {
     /// Magic value used to identify if the page of flash metadata has been
     /// written to before or not

@@ -9,7 +9,11 @@ const messaging = @import("messaging.zig");
 /// https://rules.ectf.mitre.org/2025/specs/detailed_specs.html#id6
 const SubscriptionEntry = extern struct {
     channel_id: u32 align(1),
+
+    /// Start timestamp
     start: u64 align(1),
+
+    /// End timestamp
     end: u64 align(1),
 };
 
@@ -21,13 +25,15 @@ const ListChannelResponse = extern struct {
 
     /// Initialize a `ListChannelResponse`, filling in subscription metadata
     /// from the global `subscriptions` list
-    pub fn init() ListChannelResponse {
+    pub fn init() !ListChannelResponse {
         var self = ListChannelResponse{};
 
         // Create one subscription entry per valid subscription that we have
         for (main.subscriptions) |subscription| if (subscription) |sub| {
+            const channel_id = try main.getChannelId(sub.serialized.channel_index);
+
             self.subscriptions[self.num_channels] = SubscriptionEntry{
-                .channel_id = sub.serialized.channel_id,
+                .channel_id = channel_id,
                 .start = sub.serialized.start,
                 .end = sub.serialized.end,
             };
@@ -46,6 +52,6 @@ const ListChannelResponse = extern struct {
 
 /// Send a List Channels response
 pub fn execute() !void {
-    var list_channel_response = ListChannelResponse.init();
+    var list_channel_response = try ListChannelResponse.init();
     try messaging.sendWithAcks(.List, list_channel_response.asBytes());
 }

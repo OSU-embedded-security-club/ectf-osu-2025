@@ -23,11 +23,6 @@ LEFT_SALT = b"L"
 RIGHT_SALT = b"R"
 
 
-def hash(data: bytes):
-    """Hash the data using blake3, truncating the result to 24 bytes."""
-    return blake3(data).digest(length=24)
-
-
 class Encoder:
     seeds: dict[int, bytes]
     signer: eddsa.EdDSASigScheme
@@ -43,8 +38,8 @@ class Encoder:
 
         secrets = json.loads(secrets)
         self.seeds = {
-            int(channel): bytes.fromhex(seed)
-            for channel, seed in secrets["seeds"].items()
+            int(channel): (i + 1, bytes.fromhex(seed))
+            for i, (channel, seed) in enumerate(secrets["seeds"].items())
         }
         self.signer = eddsa.new(ECC.import_key(secrets["private_key"]), "rfc8032")
         self.metadata_key = bytes.fromhex(secrets["metadata_key"])
@@ -57,7 +52,7 @@ class Encoder:
 
         You **may not** change the arguments or returns of this function!
 
-        :param channel: 16b unsigned channel number. Channel 0 is the emergency
+        :param channel: 32b unsigned channel number. Channel 0 is the emergency
             broadcast that must be decodable by all channels.
         :param frame: Frame to encode. Max frame size is 64 bytes.
         :param timestamp: 64b timestamp to use for encoding. **NOTE**: This value may
@@ -67,25 +62,28 @@ class Encoder:
 
         :returns: The encoded frame, which will be sent to the Decoder
         """
+
         if channel == 0:
             # Channel 0 does not need a subscription, so it is not encrypted using the hash tree.
-            message = struct.pack("<HQ", channel, timestamp) + frame
+            message = struct.pack("<BQ", channel, timestamp) + frame
         else:
+            channel_index, seed = self.seeds[channel]
+
             # Compute this timestamp's encryption key by starting at the top of the tree with the
             # channel's seed value, and going down the tree by taking the left or right hash
             # based on the bits of the timestamp.
-            curr = self.seeds[channel]
+            curr = seed
             for i in range(HASH_TREE_HEIGHT, -1, -1):
                 if timestamp & (1 << i) == 0:
-                    curr = hash(curr + LEFT_SALT)
+                    curr = blake3(curr + LEFT_SALT).digest(length=24)
                 else:
-                    curr = hash(curr + RIGHT_SALT)
+                    curr = blake3(curr + RIGHT_SALT).digest(length=24)
 
             # Encrypt the message using the computed key (extended from 24 to 32 bytes).
             # Since each key is only once, it is okay to have an all-zero nonce.
             encrypted_frame = Salsa20.new(key=curr+curr[:8], nonce=bytes([0 for _ in range(8)])).encrypt(frame)
 
-            message = struct.pack("<HQ", channel, timestamp) + encrypted_frame
+            message = struct.pack("<BQ", channel_index, timestamp) + encrypted_frame
 
         # Sign the message using the private key.
         signature = self.signer.sign(message)

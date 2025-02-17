@@ -13,7 +13,9 @@ pub const Subscription = struct {
     /// Minimal representation of a subscription in memory. Used to import from
     /// a Update Subscription message, reading from flash, and writing to flash
     pub const Bytes = extern struct {
-        channel_id: u16,
+        /// 0 means channel 0, otherwise `channel_index - 1` is an index into
+        /// the global `subscriptions` array of channels
+        channel_index: u8,
 
         /// Start timestamp
         start: u64,
@@ -48,7 +50,7 @@ pub const Subscription = struct {
 
     /// Create a new `Subscription`. Copies data from `root_hash_bytes` into the
     /// `Subscription`
-    pub fn init(channel_id: u16, start: u64, end: u64, root_hash_bytes: []const u8) Subscription {
+    pub fn init(channel_index: u4, start: u64, end: u64, root_hash_bytes: []const u8) Subscription {
         if (start > end) {
             @panic("Invalid range: a > b");
         }
@@ -58,7 +60,7 @@ pub const Subscription = struct {
             .cached_hashes = std.heap.c_allocator.alloc([24]u8, 65) catch @panic("OOM"),
             .roots = std.heap.c_allocator.alloc(RootPosition, 126) catch @panic("OOM"),
         };
-        self.serialized.* = .{ .channel_id = channel_id, .start = start, .end = end };
+        self.serialized.* = .{ .channel_index = channel_index, .start = start, .end = end };
 
         // Walk over the raw `root_hash_bytes` and split it into the 24 byte
         // hash chunks required
@@ -81,9 +83,10 @@ pub const Subscription = struct {
         std.heap.c_allocator.free(self.roots);
     }
 
-    /// Cache the positions (offset and length) of each root in the tree using
-    /// the `start` and `end` timestamps of this `Subscription`. Each root
-    /// position corresponds to the
+    /// Compute and cache the positions of the smallest set of roots that allows
+    /// the computation of all keys within the range of timestamps [start, end]
+    /// (inclusive), but none outside of that range. The appendix in the design
+    /// document proves that the length of the result is at most 126.
     fn calculateRootPositions(self: *Subscription) void {
         if (self.serialized.start == 0 and self.serialized.end == std.math.maxInt(u64)) {
             self.roots[0] = RootPosition{ .offset = 0, .power = 64 };
@@ -130,7 +133,7 @@ pub const Subscription = struct {
         }
 
         // Start from the lowest possible hash we have already computed, walk
-        // the down choosing left or right on the bit
+        // the down choosing left or right based on the bit
         var i = hash_index;
         while (i > 0) : (i -= 1) {
             var hasher = std.crypto.hash.Blake3.init(.{});
@@ -150,8 +153,17 @@ pub const Subscription = struct {
     }
 };
 
+/// Position of a node in the hash key derivation tree. Knowing the value of a
+/// hash at a root allows one to compute timestamps in the range [offset,
+/// offset+2**power - 1] (inclusive)
 const RootPosition = struct {
+    /// Starting timestamp of the root and horizontal position within the tree.
+    /// Must always be a multiple of `2**power`
     offset: u64,
+
+    /// Vertical position in the tree. A power of 0 means a node at the bottom
+    /// of a tree (representing an individual timestamp's key), and a power of
+    /// 64 is at the top (representing the entire range of timestamps)
     power: u7,
 
     /// Get starting timestamp of this root
