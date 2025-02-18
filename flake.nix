@@ -48,6 +48,7 @@
           GCC_ARM_EMBDEDDED = pkgs.gcc-arm-embedded;
           MAXIM_PATH = msdk;
           ED25519_PATH = ed25519;
+          DECODER_ID = "0xdeadbeef";
 
           shellHook = ''
             export SECRETS=$PWD/secrets/secrets.json

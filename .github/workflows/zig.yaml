@@ -44,6 +44,8 @@ jobs:
 
     - name: Run tests
       working-directory: decoder
+      env:
+        DECODER_ID: "0xdeadbeef"
       run: zig build test --summary all
 
   docs:
@@ -81,4 +83,6 @@ jobs:
 
     - name: Build documentation
       working-directory: decoder
+      env:
+        DECODER_ID: "0xdeadbeef"
       run: zig build docs

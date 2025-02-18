@@ -11,6 +11,7 @@ pub const messaging = @import("messaging.zig");
 pub const list = @import("list.zig");
 pub const subscribe = @import("subscribe.zig");
 pub const decode = @import("decode.zig");
+pub const hardware = @import("hardware.zig");
 
 /// Global list of up to 8 subscriptions
 pub var subscriptions = [8]?lib.Subscription{ null, null, null, null, null, null, null, null };
@@ -133,6 +134,9 @@ fn readBody(length: u16) ![]u8 {
 
 /// Entrypoint for the decoder
 export fn main() callconv(.C) noreturn {
+    hardware.mpu();
+    hardware.disable();
+
     _ = msdk.LED_Init();
 
     // Turn on blue LED to indicate we have not started yet
