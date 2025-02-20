@@ -63,6 +63,8 @@ fn run() !void {
     try uart.init();
     try flash.init();
 
+    hardware.mpu();
+
     // Turn on the green LED to indicate we are successfully processing
     msdk.LED_On(msdk.LED2);
 
@@ -134,7 +136,6 @@ fn readBody(length: u16) ![]u8 {
 
 /// Entrypoint for the decoder
 export fn main() callconv(.C) noreturn {
-    hardware.mpu();
     hardware.disable();
 
     _ = msdk.LED_Init();
