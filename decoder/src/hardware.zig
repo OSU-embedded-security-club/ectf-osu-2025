@@ -10,19 +10,13 @@ pub fn mpu() void {
     msdk.ARM_MPU_SetRegion(
         msdk.ARM_MPU_RBAR(0, 0x1000_0000), // to 0x1008_0000 (512KiB)
         // Allow execution, read-only
-        msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_RO, msdk.ARM_MPU_ACCESS_ORDERED, 1, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_512KB),
+        msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_RO, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_512KB),
     );
     msdk.ARM_MPU_Enable(msdk.MPU_CTRL_HFNMIENA_Msk | msdk.MPU_CTRL_PRIVDEFENA_Msk);
     msdk.ARM_MPU_SetRegion(
-        msdk.ARM_MPU_RBAR(2, 0x2000_0000),
+        msdk.ARM_MPU_RBAR(1, 0x2000_0000), // to 0x2002_0000 (128KB)
         // No-execute, read-write
-        msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 1, 0, 0, 0b00000001, msdk.ARM_MPU_REGION_SIZE_16KB),
-    );
-    msdk.ARM_MPU_Enable(msdk.MPU_CTRL_HFNMIENA_Msk | msdk.MPU_CTRL_PRIVDEFENA_Msk);
-    msdk.ARM_MPU_SetRegion(
-        msdk.ARM_MPU_RBAR(3, 0x2000_0000), // to 0x2002_0000 (128KB)
-        // No-execute, read-write
-        msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 1, 0, 0, 0b00000001, msdk.ARM_MPU_REGION_SIZE_128KB),
+        msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_128KB),
     );
     msdk.ARM_MPU_Enable(msdk.MPU_CTRL_HFNMIENA_Msk | msdk.MPU_CTRL_PRIVDEFENA_Msk);
 }
