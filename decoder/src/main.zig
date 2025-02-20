@@ -65,6 +65,9 @@ fn run() !void {
 
     hardware.mpu();
 
+    // const thanos: *u64 = @ptrFromInt(0x10000000 + 32);
+    // thanos.* = 5;
+
     // Turn on the green LED to indicate we are successfully processing
     msdk.LED_On(msdk.LED2);
 

@@ -1,24 +1,39 @@
 //! Interact with the hardware security features of the MAX78000
 
+const std = @import("std");
 const msdk = @import("msdk");
+
+const regions = [_]msdk.ARM_MPU_Region_t{
+    .{
+        .RBAR = msdk.ARM_MPU_RBAR(0, 0x1000_0000),
+        .RASR = msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_RO, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_512KB),
+    },
+    // .{
+    //     .RBAR = msdk.ARM_MPU_RBAR(1, 0x1006_0000),
+    //     .RASR = msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_128KB),
+    // },
+    .{
+        .RBAR = msdk.ARM_MPU_RBAR(1, 0x2000_4000),
+        .RASR = msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_RO, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_16KB),
+    },
+    .{
+        .RBAR = msdk.ARM_MPU_RBAR(2, 0x2000_0000),
+        .RASR = msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_128KB),
+    },
+    .{
+        .RBAR = msdk.ARM_MPU_RBAR(3, 0x4000_0000),
+        .RASR = msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_512MB),
+    },
+};
 
 /// Enable the Memory Protection Unit (MPU) over regions to make the code RX and
 /// the RAM RW
 pub fn mpu() void {
     msdk.ARM_MPU_Disable();
 
-    msdk.ARM_MPU_SetRegion(
-        msdk.ARM_MPU_RBAR(0, 0x1000_0000), // to 0x1008_0000 (512KiB)
-        // Allow execution, read-only
-        msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_RO, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_512KB),
-    );
-    msdk.ARM_MPU_Enable(msdk.MPU_CTRL_HFNMIENA_Msk | msdk.MPU_CTRL_PRIVDEFENA_Msk);
-    msdk.ARM_MPU_SetRegion(
-        msdk.ARM_MPU_RBAR(1, 0x2000_0000), // to 0x2002_0000 (128KB)
-        // No-execute, read-write
-        msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_128KB),
-    );
-    msdk.ARM_MPU_Enable(msdk.MPU_CTRL_HFNMIENA_Msk | msdk.MPU_CTRL_PRIVDEFENA_Msk);
+    @memcpy(@as([*]u8, @ptrCast(&msdk.MPU.*.RBAR))[0..32], std.mem.asBytes(&regions));
+
+    msdk.ARM_MPU_Enable(0);
 }
 
 /// Disable all peripherals
