@@ -39,6 +39,7 @@ class Root:
 
     Knowing the value of a hash at a root allows one to compute timestamps in the range [offset, offset+2**power - 1] (inclusive).
     """
+
     offset: int
     power: int
 
@@ -65,10 +66,16 @@ def gen_subscription(
 
     # Compute the key used to encrypt subscriptions for this device, which depends on the secret subscription_salt and the device id.
     # This key was also computed when the decoder was built and embedded in the firmware, so that the device can decrypt the message.
-    subscription_key = blake3(f"{subscription_salt.hex()}{device_id:08x}".encode()).digest()
+    subscription_key = blake3(
+        f"{subscription_salt.hex()}{device_id:08x}".encode()
+    ).digest()
 
     # Get the root node of the hash tree for this channel.
-    channel_index, seed = next((i + 1, bytes.fromhex(v)) for i, (k, v) in enumerate(secrets["seeds"].items()) if k == str(channel))
+    channel_index, seed = next(
+        (i + 1, bytes.fromhex(v))
+        for i, (k, v) in enumerate(secrets["seeds"].items())
+        if k == str(channel)
+    )
 
     # Compute the positions of the nodes in the tree needed for decrypting nodes within the timestamp range.
     # We only need to send the hash values at these positions, and don't need to send any metadata about where they are in the tree,
@@ -87,7 +94,7 @@ def gen_subscription(
                 curr = blake3(curr + RIGHT_SALT).digest(length=24)
         hashes.append(curr)
 
-    plaintext_body = struct.pack("<QQB", start, end, channel_index) + b''.join(hashes)
+    plaintext_body = struct.pack("<QQB", start, end, channel_index) + b"".join(hashes)
 
     # Sign the message using the private key.
     signer = eddsa.new(ECC.import_key(secrets["private_key"]), "rfc8032")
@@ -95,9 +102,12 @@ def gen_subscription(
 
     # Encrypt it using the device's subscription key. The nonce is the first 8 bytes of the signature
     # since that is a random value which the decoder can know without us including any additional data in our message.
-    encrypted_body = Salsa20.new(key=subscription_key, nonce=signature[0:8]).encrypt(plaintext_body)
+    encrypted_body = Salsa20.new(key=subscription_key, nonce=signature[0:8]).encrypt(
+        plaintext_body
+    )
 
     return signature + encrypted_body
+
 
 def ctz(x: int) -> int:
     """
@@ -126,8 +136,10 @@ def get_roots(a: int, b: int) -> list[Root]:
     ranges = []
 
     while a <= b:
-        # `ctz(a)` is the largest the power can be due to the alignment of `a`.
-        # Also, we need `a + 2**power - 1 <= b` so the range doesn't go too long, hence `power <= (b - a + 1).bit_length() - 1`.
+        # `ctz(a)` (count trailing zeroes) is the largest
+        # that the power can be due to the alignment of `a`.
+        # Also, we need `a + 2**power - 1 <= b` so the range doesn't go too long,
+        # which by algebra implies `power <= (b - a + 1).bit_length() - 1`.
         power = min((b - a + 1).bit_length() - 1, ctz(a))
         ranges.append(Root(power=power, offset=a))
         a += 1 << power
