@@ -1,4 +1,4 @@
-//! Interface for interacting with a subscription and its key hash derivation
+//! Interface for interacting with a subscription and its hash key derivation
 //! tree. See the design documentation for the theory
 
 const std = @import("std");

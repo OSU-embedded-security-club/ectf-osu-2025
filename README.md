@@ -7,8 +7,8 @@ This repo contains all the code and documentation for team `scriptohio` from The
 Highlights of our design:
 
 - 🔐 **Strong cryptography**
+  - 💃 The [Salsa20](https://en.wikipedia.org/wiki/Salsa20) stream cipher is used for lightning quick symmetric encryption and decryption
   - 🌲 Our _binary hash key derivation tree_ efficiently compresses unique keys per timestamp to create a subscription over a time interval 🕐
-  - 💃 The [Salsa20](https://en.wikipedia.org/wiki/Salsa20) post-quantum stream cipher is used for lightning quick symmetric encryption and decryption
   - 📝 All frames are signed and verified with [Ed25519](https://en.wikipedia.org/wiki/EdDSA#Ed25519) to ensure decoders only read frames from the encoder they came from
 - ⚡ **Written in Zig**
   - 📦 Expansive standard library which includes everything a programmer might need, from string manipulation to secure cryptography
