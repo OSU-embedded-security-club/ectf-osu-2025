@@ -3,6 +3,14 @@
 #set heading(numbering: "1.")
 #set page("us-letter", numbering: "1")
 
+#show link: it => {
+  if type(it.dest) == str and it.dest.starts-with("https://") {
+    text(underline(it), fill: blue)
+  } else {
+    it
+  }
+}
+
 #show ref: it => {
   let target = str(it.target)
   if target.starts-with("sr") {
@@ -65,6 +73,19 @@ The team is comprised of the following people from the Ohio State State Universi
 
 This document describes OSU's implementation of a secure satellite TV system as specified by #link("https://rules.ectf.mitre.org/2025", [MITRE's eCTF 2025]). The Satellite TV system features a simulated satellite sending ASCII art to subscribed hardware Decoder devices, implementing the Functional Requirements (@functional-requirements). The decoder devices are #link("https://analog.com/resources/evaluation-hardware-and-software/evaluation-boards-kits/max78000fthr", [MAX78000FTHR microcontrollers by Analog Devices]). The system is secured according to the Security Requirements (@security-requirements), and designed to defend against attacks as outlined in Attack Scenarios (@attack-scenarios), which revolve around erroneously decoding frames sent by a satellite.
 
+== Source Code and Documentation
+
+#grid(
+  columns: 2,
+  column-gutter: 2em,
+  row-gutter: 0.75em,
+  [Source Code:],
+  link("https://github.com/OSU-embedded-security-club/ectf-osu-2025")[https://github.com/OSU-embedded-security-club/ectf-osu-2025],
+
+  [Documentation:],
+  link("https://osu-embedded-security-club.github.io/ectf-osu-2025")[https://osu-embedded-security-club.github.io/ectf-osu-2025],
+)
+
 = Functional Requirements <functional-requirements>
 
 The two main components are the Encoder and Decoder. The encoder receives frames of up to 64 bytes, and converts them into our custom format before sending it over the satellite link. Then, each decoder receives the frame, and must decode the message into the original 64 bytes.
@@ -88,7 +109,9 @@ The two main components are the Encoder and Decoder. The encoder receives frames
 
 == Available Channels <available-channels>
 
-A deployment will be provisioned with up to 8 Channel IDs. A Channel ID is an unsigned 32 bit integer. Additionally, Channel 0 is reserved as an Emergency Channel which all decoders must be able to decode, as if they always had an active subscription.
+A decoder must be able to store up to 8 subscriptions, which must persist over reboots.
+Additionally, Channel 0 is reserved as an Emergency Channel which all decoders must be able to decode, as if they always had an active subscription.
+The deployment may be provisioned with up to $2^32-1$ channels.
 
 = Security Requirements <security-requirements>
 
@@ -201,7 +224,7 @@ At build time, the decoder derives the following secrets and stores them within 
       align: left,
       table.header([Field Name], [Size], [Relative Size]),
       [Signature], [64 bytes], bytesize(64),
-      [Channel Index], [1 byte], bytesize(1),
+      [Channel Id], [4 bytes], bytesize(4),
       [Timestamp], [8 bytes], bytesize(8),
       [Message], [up to 64 bytes], variablebytesize(64),
     ),
@@ -213,9 +236,7 @@ Each frame has an integer timestamp $t in [0, 2^64 - 1]$. We derive a unique key
 
 For channel 0, there are no subscriptions, so this first layer of encryption doesn't occur, and _EncryptedMessage_ = _Message_.
 
-The _Channel Index_ is a 1-based index into the array of channels which the system has been provisioned for, $C_1, ..., C_8$, where each $C_"channel_id"$ is a 32 bit Channel ID. When _Channel Index_ is $0$, it indicates that the frame is for the 0 channel which is reserved as the Emergency Channel per the Functional Requirements in @available-channels.
-
-After the _Message_ is encrypted with frame's key, _Channel Index_, _Timestamp_, and _EncryptedMessage_ are signed with $K_"private"$ to form the _Signature_ which is prepended to the data. Then, those three fields are Salsa encrypted with the symmetric $K_"metadata"$ key using the first 8 bytes of _Signature_ as a nonce. The signature is concatenated with the encrypted _Channel Index_, _Timestamp_, and _EncryptedMessage_ to form the final message.
+After the _Message_ is encrypted with frame's key, _Channel Id_, _Timestamp_, and _EncryptedMessage_ are signed with $K_"private"$ to form the _Signature_ which is prepended to the data. Then, those three fields are Salsa encrypted with the symmetric $K_"metadata"$ key using the first 8 bytes of _Signature_ as a nonce. The signature is concatenated with the encrypted _Channel Id_, _Timestamp_, and _EncryptedMessage_ to form the final message.
 
 #figure(
   align(
@@ -319,7 +340,7 @@ This aspect of the design secures the system in the following ways:
       [Signature], [64 bytes], bytesize(64),
       [Start Timestamp], [8 bytes], bytesize(8),
       [End Timestamp], [8 bytes], bytesize(8),
-      [Channel Index], [1 byte], bytesize(1),
+      [Channel Id], [4 bytes], bytesize(4),
       [Root Hashes],
       ${24n "bytes" | n <= 126 }$,
       box(box(bytesize(24)) + " " + box($...n "times"$)),
@@ -334,14 +355,13 @@ A root location is defined by its offset (starting timestamp) and its power (how
 Its length is $2^"power"$.
 Then the encoder calculates the hashes for each root, starting at the root node and going down to the root's power, doing left or right hashes based on the bits of the roots's offset.
 
-The plaintext contents _Start Timestamp_, _End Timestamp_, _Channel Index_, and _Root Hashes_ are signed with $K_"private"$ to form the _Signature_ which is prepended to the data. Then, those four fields are encrypted with $K_"subscription"$ using the first 8 bytes of _Signature_ as a nonce, which forms the final subscribe packet. This ensures that subscriptions can only be used by the decoder for which the subscription was generated.
+The plaintext contents _Start Timestamp_, _End Timestamp_, _Channel Id_, and _Root Hashes_ are signed with $K_"private"$ to form the _Signature_ which is prepended to the data. Then, those four fields are encrypted with $K_"subscription"$ using the first 8 bytes of _Signature_ as a nonce, which forms the final subscribe packet. This ensures that subscriptions can only be used by the decoder for which the subscription was generated.
 
 The decoder runs the same algorithm as the encoder to locate the root nodes from the start and end timestamps, so the subscription packet can contain only the hash values, with no extra metadata like root locations or number of roots.
 The proof in @proof shows that this scheme requires no more than 126 root nodes.
 See @algorithm for the algorithm which is used to find the root nodes corresponding to a timestamp range.
 
-The _Channel Index_ is a 1-based index into the array of channels which the system has been provisioned for, $C_1, ..., C_8$, where each $C_"channel_id"$ is a 32 bit Channel ID.
-Unlike in @encode-decode, the _Channel Index_ may not be 0, because every decoder is assumed to already be subscribed to Channel 0 (the Emergency Channel).
+Unlike in @encode-decode, the _Channel Id_ may not be 0, because every decoder is assumed to already be subscribed to Channel 0 (the Emergency Channel).
 
 This aspect of the design secures the system in the following ways:
 
