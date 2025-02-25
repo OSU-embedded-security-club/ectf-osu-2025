@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const msdk = @import("msdk");
+const secrets = @import("secrets");
 
 const regions = [_]msdk.ARM_MPU_Region_t{
     .{
@@ -31,9 +32,11 @@ const regions = [_]msdk.ARM_MPU_Region_t{
 pub fn mpu() void {
     msdk.ARM_MPU_Disable();
 
-    @memcpy(@as([*]u8, @ptrCast(&msdk.MPU.*.RBAR))[0..32], std.mem.asBytes(&regions));
+    // @memcpy(@as([*]u8, @ptrCast(&msdk.MPU.*.RBAR))[0..32], std.mem.asBytes(&regions));
 
-    msdk.ARM_MPU_Enable(0);
+    msdk.ARM_MPU_SetRegion(msdk.ARM_MPU_RBAR(0, @intFromPtr(&secrets.public_key)), msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_RO, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b11111100, msdk.ARM_MPU_REGION_SIZE_128B));
+
+    msdk.ARM_MPU_Enable(msdk.MPU_CTRL_HFNMIENA_Msk | msdk.MPU_CTRL_PRIVDEFENA_Msk);
 }
 
 /// Disable all peripherals

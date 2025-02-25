@@ -65,8 +65,9 @@ fn run() !void {
 
     hardware.mpu();
 
-    // const thanos: *u64 = @ptrFromInt(0x10000000 + 32);
+    // const thanos: *u8 = @ptrCast(@constCast(&secrets.public_key));
     // thanos.* = 5;
+    // messaging.sendDebug("public key: {any}", .{secrets.public_key});
 
     // Turn on the green LED to indicate we are successfully processing
     msdk.LED_On(msdk.LED2);
