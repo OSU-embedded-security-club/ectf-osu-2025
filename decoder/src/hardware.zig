@@ -32,15 +32,13 @@ const regions = [_]msdk.ARM_MPU_Region_t{
 pub fn mpu() void {
     msdk.ARM_MPU_Disable();
 
-    // @memcpy(@as([*]u8, @ptrCast(&msdk.MPU.*.RBAR))[0..32], std.mem.asBytes(&regions));
-
     msdk.ARM_MPU_SetRegion(msdk.ARM_MPU_RBAR(0, @intFromPtr(&secrets.public_key)), msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_RO, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b11111100, msdk.ARM_MPU_REGION_SIZE_128B));
 
     msdk.ARM_MPU_SetRegion(msdk.ARM_MPU_RBAR(1, 0x20000000), msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_128KB));
     msdk.ARM_MPU_SetRegion(msdk.ARM_MPU_RBAR(2, 0x20000000), msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_32B));
 
     msdk.ARM_MPU_SetRegion(msdk.ARM_MPU_RBAR(3, 0x10000000), msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_RO, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_256KB));
-
+    
     msdk.ARM_MPU_Enable(msdk.MPU_CTRL_HFNMIENA_Msk | msdk.MPU_CTRL_PRIVDEFENA_Msk);
 }
 

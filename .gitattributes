@@ -2,3 +2,4 @@
 /decoder/c/Makefile linguist-vendored=true
 /decoder/c/project.mk linguist-vendored=true
 /decoder/c/startup_firmware.S linguist-vendored=true
+*.svg binary

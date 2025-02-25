@@ -30,10 +30,8 @@ const ListChannelResponse = extern struct {
 
         // Create one subscription entry per valid subscription that we have
         for (main.subscriptions) |subscription| if (subscription) |sub| {
-            const channel_id = try main.getChannelId(sub.serialized.channel_index);
-
             self.subscriptions[self.num_channels] = SubscriptionEntry{
-                .channel_id = channel_id,
+                .channel_id = sub.serialized.channel_id,
                 .start = sub.serialized.start,
                 .end = sub.serialized.end,
             };

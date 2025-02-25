@@ -32,7 +32,7 @@
 
       in {
         devShells.default = pkgs.mkShell {
-          name = "ectf-zig";
+          name = "ectf-osu-2025";
 
           buildInputs = with pkgs; [
             toolsPackage

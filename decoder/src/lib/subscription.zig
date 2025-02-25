@@ -1,4 +1,4 @@
-//! Interface for interacting with a subscription and its key hash derivation
+//! Interface for interacting with a subscription and its hash key derivation
 //! tree. See the design documentation for the theory
 
 const std = @import("std");
@@ -13,9 +13,8 @@ pub const Subscription = struct {
     /// Minimal representation of a subscription in memory. Used to import from
     /// a Update Subscription message, reading from flash, and writing to flash
     pub const Bytes = extern struct {
-        /// 0 means channel 0, otherwise `channel_index - 1` is an index into
-        /// the global `subscriptions` array of channels
-        channel_index: u8,
+        /// The Channel ID
+        channel_id: u32,
 
         /// Start timestamp
         start: u64,
@@ -50,7 +49,7 @@ pub const Subscription = struct {
 
     /// Create a new `Subscription`. Copies data from `root_hash_bytes` into the
     /// `Subscription`
-    pub fn init(channel_index: u4, start: u64, end: u64, root_hash_bytes: []const u8) Subscription {
+    pub fn init(channel_id: u32, start: u64, end: u64, root_hash_bytes: []const u8) Subscription {
         if (start > end) {
             @panic("Invalid range: a > b");
         }
@@ -60,7 +59,7 @@ pub const Subscription = struct {
             .cached_hashes = std.heap.c_allocator.alloc([24]u8, 65) catch @panic("OOM"),
             .roots = std.heap.c_allocator.alloc(RootPosition, 126) catch @panic("OOM"),
         };
-        self.serialized.* = .{ .channel_index = channel_index, .start = start, .end = end };
+        self.serialized.* = .{ .channel_id = channel_id, .start = start, .end = end };
 
         // Walk over the raw `root_hash_bytes` and split it into the 24 byte
         // hash chunks required

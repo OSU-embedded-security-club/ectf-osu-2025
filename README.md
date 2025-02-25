@@ -1,14 +1,14 @@
 # OSU Satellite TV for MITRE eCTF 2025
 
-[![Zig 0.13.0](https://img.shields.io/badge/Zig-0.13.0-f7a41d?logo=zig)](https://ziglang.org) [![Zig](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/zig.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/zig.yaml) [![eCTF](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/ectf.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/ectf.yaml) [![Documentation](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/documentation.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-zig/actions/workflows/documentation.yaml)
+[![Zig 0.13.0](https://img.shields.io/badge/Zig-0.13.0-f7a41d?logo=zig)](https://ziglang.org) [![Zig](https://github.com/OSU-embedded-security-club/ectf-osu-2025/actions/workflows/zig.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-osu-2025/actions/workflows/zig.yaml) [![eCTF](https://github.com/OSU-embedded-security-club/ectf-osu-2025/actions/workflows/ectf.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-osu-2025/actions/workflows/ectf.yaml) [![Documentation](https://github.com/OSU-embedded-security-club/ectf-osu-2025/actions/workflows/documentation.yaml/badge.svg)](https://github.com/OSU-embedded-security-club/ectf-osu-2025/actions/workflows/documentation.yaml)
 
 This repo contains all the code and documentation for team `scriptohio` from The Ohio State University in [MITRE's eCTF 2025](https://rules.ectf.mitre.org/2025/index.html).
 
 Highlights of our design:
 
 - 🔐 **Strong cryptography**
+  - 💃 The [Salsa20](https://en.wikipedia.org/wiki/Salsa20) stream cipher is used for lightning quick symmetric encryption and decryption
   - 🌲 Our _binary hash key derivation tree_ efficiently compresses unique keys per timestamp to create a subscription over a time interval 🕐
-  - 💃 The [Salsa20](https://en.wikipedia.org/wiki/Salsa20) post-quantum stream cipher is used for lightning quick symmetric encryption and decryption
   - 📝 All frames are signed and verified with [Ed25519](https://en.wikipedia.org/wiki/EdDSA#Ed25519) to ensure decoders only read frames from the encoder they came from
 - ⚡ **Written in Zig**
   - 📦 Expansive standard library which includes everything a programmer might need, from string manipulation to secure cryptography
@@ -84,4 +84,5 @@ The design document is available to read [as a PDF](docs/design.pdf), or inline 
   <img src="docs/pages/page-8.svg">
   <img src="docs/pages/page-9.svg">
   <img src="docs/pages/page-10.svg">
+  <img src="docs/pages/page-11.svg">
 </details>
