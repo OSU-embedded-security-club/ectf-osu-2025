@@ -56,6 +56,7 @@ The team is comprised of the following people from the Ohio State State Universi
   [Divij Sasidhar], [],
   [Joshua Sims], [],
   [Eva Smith], [],
+  [JT Vendetti], [],
   [Matthew Weikel], [],
   [Zihao Zhang], [],
 )
