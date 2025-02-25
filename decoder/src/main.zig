@@ -134,7 +134,6 @@ fn readBody(length: u16) ![]u8 {
         uart.readBytes(body[i..@min(i + 256, length)]);
         messaging.sendAck();
     }
-
     return body;
 }
 
