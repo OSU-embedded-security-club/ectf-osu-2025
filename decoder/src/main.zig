@@ -16,17 +16,6 @@ pub const hardware = @import("hardware.zig");
 /// Global list of up to 8 subscriptions
 pub var subscriptions = [8]?lib.Subscription{ null, null, null, null, null, null, null, null };
 
-/// Validate a `channel_index` corresponds to a channel id which this decoder
-/// was provisioned for, and return it
-pub fn getChannelId(channel_index: usize) DecoderError!u32 {
-    if (channel_index == 0) return 0;
-
-    if (channel_index > secrets.channel_ids.len)
-        return error.UnknownChannelId;
-
-    return secrets.channel_ids[channel_index - 1];
-}
-
 /// The size of the biggest possible message we expect
 const max_message_size = @max(subscribe.max_message_size, decode.max_message_size);
 
@@ -38,24 +27,33 @@ const DecoderError = error{
     /// The body is invalid for the given message kind attempting to be decoded
     InvalidBody,
 
-    /// The message has an opcode which is not defined in the Functional Requirements
+    /// The message has an opcode which is not defined in the Functional
+    /// Requirements
     /// https://rules.ectf.mitre.org/2025/specs/detailed_specs.html#decoder-interface
     InvalidOpcode,
 
-    /// A cryptographic signature has failed to verify. This suggests either a bit flip over UART, or critical tampering
+    /// A cryptographic signature has failed to verify. This suggests either a
+    /// bit flip over UART, or critical tampering
     InvalidSignature,
 
     /// The decoder does not have a subscription to the channel ID
     NoSubscription,
 
-    /// The frame trying to be decoded has a timestamp which is not within the subscription's interval for the channel
+    /// The frame trying to be decoded has a timestamp which is not within the
+    /// subscription's interval for the channel
     NotInSubscriptionTimeRange,
 
-    /// The decoder has been presented with a channel ID which it was not provisioned for
+    /// The decoder has been presented with a channel ID which it was not
+    /// provisioned for
     UnknownChannelId,
 
-    /// The decoder has already decoded a frame with a timestamp larger than the current frame's timestamp
+    /// The decoder has already decoded a frame with a timestamp larger than the
+    /// current frame's timestamp
     DecreasingTimestamp,
+
+    /// The decoder has already reached the maximum number of subscriptions it
+    /// can support (8), and another subscription is trying to be added
+    TooManySubscriptions,
 };
 
 /// High level entrypoint for the decoder

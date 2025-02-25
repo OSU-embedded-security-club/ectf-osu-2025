@@ -37,10 +37,7 @@ class Encoder:
         """
 
         secrets = json.loads(secrets)
-        self.seeds = {
-            int(channel): (i + 1, bytes.fromhex(seed))
-            for i, (channel, seed) in enumerate(secrets["seeds"].items())
-        }
+        self.seeds = secrets["seeds"]
         self.signer = eddsa.new(ECC.import_key(secrets["private_key"]), "rfc8032")
         self.metadata_key = bytes.fromhex(secrets["metadata_key"])
 
@@ -65,9 +62,9 @@ class Encoder:
 
         if channel == 0:
             # Channel 0 does not need a subscription, so it is not encrypted using the hash tree.
-            message = struct.pack("<BQ", channel, timestamp) + frame
+            message = struct.pack("<IQ", channel, timestamp) + frame
         else:
-            channel_index, seed = self.seeds[channel]
+            seed = bytes.fromhex(self.seeds[str(channel)])
 
             # Compute this timestamp's encryption key by starting at the top of the tree with the
             # channel's seed value, and going down the tree by taking the left or right hash
@@ -83,7 +80,7 @@ class Encoder:
             # Since each key is only once, it is okay to have an all-zero nonce.
             encrypted_frame = Salsa20.new(key=curr+curr[:8], nonce=bytes([0 for _ in range(8)])).encrypt(frame)
 
-            message = struct.pack("<BQ", channel_index, timestamp) + encrypted_frame
+            message = struct.pack("<IQ", channel, timestamp) + encrypted_frame
 
         # Sign the message using the private key.
         signature = self.signer.sign(message)

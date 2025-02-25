@@ -71,11 +71,7 @@ def gen_subscription(
     ).digest()
 
     # Get the root node of the hash tree for this channel.
-    channel_index, seed = next(
-        (i + 1, bytes.fromhex(v))
-        for i, (k, v) in enumerate(secrets["seeds"].items())
-        if k == str(channel)
-    )
+    seed = bytes.fromhex(secrets["seeds"][str(channel)])
 
     # Compute the positions of the nodes in the tree needed for decrypting nodes within the timestamp range.
     # We only need to send the hash values at these positions, and don't need to send any metadata about where they are in the tree,
@@ -94,7 +90,7 @@ def gen_subscription(
                 curr = blake3(curr + RIGHT_SALT).digest(length=24)
         hashes.append(curr)
 
-    plaintext_body = struct.pack("<QQB", start, end, channel_index) + b"".join(hashes)
+    plaintext_body = struct.pack("<QQI", start, end, channel) + b"".join(hashes)
 
     # Sign the message using the private key.
     signer = eddsa.new(ECC.import_key(secrets["private_key"]), "rfc8032")
