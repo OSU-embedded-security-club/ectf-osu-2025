@@ -26,24 +26,22 @@ tasks:
     vars:
       CHANNELS: '{{.CLI_ARGS | default "1 2 3"}}'
     cmds:
-      - python -m ectf25_design.gen_secrets -f secrets/secrets.json {{.CHANNELS}}
+      - python -m ectf25_design.gen_secrets -f global.secrets {{.CHANNELS}}
 
   2-build-firmware:
     desc: Build the firmware image
-    dir: decoder
     vars:
       DECODER_ID: '{{.DECODER_ID | default "0xdeadbeef"}}'
     cmds:
-      - docker build -t decoder .
-      - docker run --rm -v ./build_out:/out -v ./:/decoder -v ./../secrets:/secrets -e DECODER_ID={{.DECODER_ID}} decoder
+      - docker build -t decoder decoder
+      - docker run --rm -v ./decoder/:/decoder -v ./global.secrets:/global.secrets:ro -v ./deadbeef_build:/out -e DECODER_ID={{.DECODER_ID}} decoder
 
   3-flash:
     desc: Flash the built firmware image onto the Decoder
-    dir: decoder
     deps:
       - task: require-decoder
     cmds:
-      - python -m ectf25.utils.flash ./build_out/max78000.bin {{.PORT}}
+      - python -m ectf25.utils.flash ./deadbeef_build/max78000.bin {{.PORT}}
 
   4-gen-subscription:
     desc: Generate a subscription
@@ -54,7 +52,7 @@ tasks:
       END: '{{.END | default "128"}}'
       CHANNEL: '{{.CHANNEL | default "1"}}'
     cmds:
-      - python -m ectf25_design.gen_subscription -f secrets/secrets.json {{.FILE}} {{.DEVICE_ID}} {{.START}} {{.END}} {{.CHANNEL}}
+      - python -m ectf25_design.gen_subscription -f global.secrets {{.FILE}} {{.DEVICE_ID}} {{.START}} {{.END}} {{.CHANNEL}}
 
   5-subscribe:
     desc: Take a subscription file and send it to the Decoder
@@ -79,7 +77,7 @@ tasks:
     desc: Encodes sample frames with the custom encoder function and sends them to the satellite
     prefix: uplink
     cmds:
-      - python -m ectf25.uplink secrets/secrets.json localhost 2000 1:10:frames/x_c0.json
+      - python -m ectf25.uplink global.secrets localhost 2000 1:10:frames/x_c0.json
 
   8-satellite:
     desc: Broadcasts all frames received from the uplink to all listening TVs on the host computer
@@ -106,13 +104,6 @@ tasks:
       - task: uplink
       - task: delayed-satellite
 
-  shell:
-    desc: Spawn a shell in the docker container
-    dir: decoder
-    cmds:
-      - docker build -t decoder .
-      - docker run --rm -v ./build_out:/out -v ./:/decoder -v ./../secrets:/secrets -e DECODER_ID={{.DECODER_ID}} -it --entrypoint /bin/bash decoder
-
   bench-encoder:
     desc: Benchmark the encoder
     cmds:
@@ -137,7 +128,7 @@ tasks:
     generates:
       - frames/custom.json
     cmds:
-      - python -m ectf25.utils.stress_test -t 6400 encode secrets/secrets.json --dump frames/custom.json
+      - python -m ectf25.utils.stress_test -t 6400 encode global.secrets --dump frames/custom.json
 
   stress-decoder:
     desc: Use MITRE's stress test to benchmark the decoder

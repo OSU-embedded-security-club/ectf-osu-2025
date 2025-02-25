@@ -49,12 +49,8 @@ RUN curl -L "https://github.com/orlp/ed25519/archive/refs/heads/master.zip" -o e
 ENV ED25519_PATH=/root/ed25519-master
 
 ENV ZIG_LOCAL_CACHE_DIR=/root/zig-cache
-ENV SECRETS_PATH=/secrets/secrets.json
+ENV SECRETS_PATH=/global.secrets
 
 WORKDIR /decoder
 
 ENTRYPOINT ["bash", "-c", "make release DECODER_ID=${DECODER_ID}"]
-# ENTRYPOINT ["/bin/sh"]
-
-# Sample run command:
-# docker run --rm -v ./build_out:/out -v ./:/decoder -v ./secrets:/secrets -e DECODER_ID=0xdeadbeef decoder

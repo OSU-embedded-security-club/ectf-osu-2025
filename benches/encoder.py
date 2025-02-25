@@ -5,7 +5,7 @@ import random
 import time
 
 def main():
-    secrets = open('secrets/secrets.json', 'rb').read()
+    secrets = open('global.secrets', 'rb').read()
 
     channel = 1
 

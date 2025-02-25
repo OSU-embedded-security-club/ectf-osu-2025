@@ -191,17 +191,17 @@ const Secrets = struct {
     metadata_key: [32]u8,
 };
 
-/// Use the shared secrets between the encoder and decoder in
-/// `secrets/secrets.json` to derive keys and metadata, and generate other
-/// required secrets that the decoder needs
+/// Use the shared secrets between the encoder and decoder in `global.secrets`
+/// to derive keys and metadata, and generate other required secrets that the
+/// decoder needs
 fn getSecrets(allocator: std.mem.Allocator) !Secrets {
     // Read in secrets JSON file
     const env = try std.process.getEnvMap(allocator);
-    const secrets_path = env.get("SECRETS") orelse "../secrets/secrets.json";
+    const secrets_path = env.get("SECRETS_PATH") orelse "../global.secrets";
     const file = try std.fs.cwd().openFile(secrets_path, .{});
     defer file.close();
 
-    const contents = try file.readToEndAlloc(allocator, 8192);
+    const contents = try file.readToEndAlloc(allocator, 1 << 16);
     defer allocator.free(contents);
 
     const SecretsJson = struct {
