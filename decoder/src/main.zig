@@ -63,8 +63,6 @@ fn run() !void {
     try uart.init();
     try flash.init();
 
-    hardware.mpu();
-
     // Turn on the green LED to indicate we are successfully processing
     msdk.LED_On(msdk.LED2);
 
