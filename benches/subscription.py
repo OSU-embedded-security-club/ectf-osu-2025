@@ -12,7 +12,7 @@ def main():
 
     decoder = DecoderIntf(args.port)
 
-    secrets = open('secrets/secrets.json', 'rb').read()
+    secrets = open('global.secrets', 'rb').read()
     channel = 1
     subscription = gen_subscription(secrets=secrets, device_id=0xdeadbeef, start=1, end=2**64 - 2, channel=channel)
 

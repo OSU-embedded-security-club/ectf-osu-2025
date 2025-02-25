@@ -7,3 +7,4 @@ __pycache__/
 /decoder/docs/
 *.egg-info/
 frames/custom.json
+global.secrets

@@ -35,7 +35,7 @@ jobs:
 
     - name: Generate secrets
       run: |
-        python -m ectf25_design.gen_secrets -f secrets/secrets.json 1 2 3
+        python -m ectf25_design.gen_secrets -f global.secrets 1 2 3
 
     - name: Install zig
       uses: mlugg/setup-zig@v1
@@ -60,7 +60,7 @@ jobs:
 
     - name: Generate secrets
       run: |
-        python -m ectf25_design.gen_secrets -f secrets/secrets.json 1 2 3
+        python -m ectf25_design.gen_secrets -f global.secrets 1 2 3
 
     - name: Install zig
       uses: mlugg/setup-zig@v1

@@ -51,7 +51,7 @@
           DECODER_ID = "0xdeadbeef";
 
           shellHook = ''
-            export SECRETS=$PWD/secrets/secrets.json
+            export SECRETS_PATH=$PWD/global.secrets
           '';
         };
       }

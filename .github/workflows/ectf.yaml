@@ -24,7 +24,7 @@ jobs:
         python -m pip install -e ./design/
 
     - name: Generate secrets
-      run: python -m ectf25_design.gen_secrets -f secrets/secrets.json 1 2 3
+      run: python -m ectf25_design.gen_secrets -f global.secrets 1 2 3
 
     - name: Cache Docker images
       uses: ScribeMD/docker-cache@0.5.0
@@ -32,19 +32,17 @@ jobs:
         key: docker-${{ runner.os }}-${{ hashFiles('decoder/Dockerfile') }}
 
     - name: Build docker image
-      working-directory: decoder
-      run: docker build -t decoder .
+      run: docker build -t decoder decoder
 
     - name: Build firmware
-      working-directory: decoder
-      run: docker run --rm -v ./build_out:/out -v ./:/decoder -v ./../secrets:/secrets -e DECODER_ID=0xdeadbeef decoder
+      run: docker run --rm -v ./decoder/:/decoder -v ./global.secrets:/global.secrets:ro -v ./deadbeef_build:/out -e DECODER_ID=0xdeadbeef decoder
 
     - name: Create artifact
       if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
       uses: actions/upload-artifact@v4
       with:
         name: max78000.bin
-        path: decoder/build_out/max78000.bin
+        path: deadbeef_build/max78000.bin
 
     - name: Get tag name
       if: ${{ (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
@@ -58,4 +56,4 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: |
         gh release create ${{ steps.tag-name.outputs.tagname }} -t "firmware" -n "Firmware release (${{ steps.tag-name.outputs.tagname }})"
-        gh release upload ${{ steps.tag-name.outputs.tagname }} decoder/build_out/max78000.bin
+        gh release upload ${{ steps.tag-name.outputs.tagname }} deadbeef_build/max78000.bin
