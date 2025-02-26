@@ -1,5 +1,5 @@
 from pathlib import Path
-from ectf25.utils.decoder import DecoderIntf, Message
+from ectf25.utils.decoder import DecoderIntf, Message, logger
 import argparse
 import re
 import ast
@@ -41,10 +41,14 @@ def get_commands(terminal_output: str) -> list[Command]:
     commands = []
     lines = terminal_output.splitlines()
     for i, line in enumerate(lines):
+        if line.startswith("#"):
+            continue
         if match := re.search(r"""Sending packet (b'.*'|b".*")$""", line):
             commands.append(SendPacket(ast.literal_eval(match[1])))
-        elif match := re.search(r"Got message Message(\(.*\))$", line):
-            commands.append(GetMessage())
+        elif match := re.search(r"Got message Message\(opcode=<Opcode.(\w+)", line):
+            opcode = match[1]
+            if opcode != "DEBUG" and opcode != "ERROR":
+                commands.append(GetMessage())
         elif (
             "================================================================================"
             in line
@@ -66,18 +70,22 @@ def main():
 
     decoder = DecoderIntf(port)
     decoder._open()
-    for command in commands:
-        match command:
+    i = 0
+    while i <= len(commands):
+        match commands[i]:
             case SendPacket(packet):
+                logger.debug(f"Sending packet {packet}")
                 decoder.ser.write(packet)
+                decoder.get_msg()
             case Log(message):
                 print(message)
-            case GetMessage:
+            case GetMessage():
+                print("Starting getmessage")
                 try:
                     message = decoder.get_msg()
                 except Exception:
-                    print("CAUGHT ERROR")
                     pass
+        i += 1
 
 
 if __name__ == "__main__":
