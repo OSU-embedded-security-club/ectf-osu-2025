@@ -141,7 +141,7 @@ export fn main() callconv(.C) noreturn {
 
     // Wait for some time before we start processing to help prevent brute force attacks
     // https://rules.ectf.mitre.org/faq.html#can-we-add-intentional-delays-during-boot-to-make-it-more-difficult-for-an-attacker-to-collect-large-numbers-of-observations
-    _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(4500));
+    // _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(4500));
 
     // Turn off the blue LED and start the startup process
     msdk.LED_Off(msdk.LED3);
