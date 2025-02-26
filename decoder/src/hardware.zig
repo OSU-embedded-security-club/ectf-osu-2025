@@ -1,17 +1,10 @@
 //! Interact with the hardware security features of the MAX78000
-
-const std = @import("std");
 const msdk = @import("msdk");
-const secrets = @import("secrets");
-const messaging = @import("messaging.zig");
 
 /// Enable the Memory Protection Unit (MPU) over regions to make the code RX and
 /// the RAM RW
 pub fn mpu() void {
     msdk.ARM_MPU_Disable();
-
-    msdk.ARM_MPU_SetRegion(msdk.ARM_MPU_RBAR(0, @intFromPtr(&secrets.public_key)), msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_RO, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b11111100, msdk.ARM_MPU_REGION_SIZE_128B));
-    messaging.sendDebug("intFromPtr: 0x{x}", .{@intFromPtr(&secrets.public_key)});
 
     // make SRAM non-executable
     msdk.ARM_MPU_SetRegion(
