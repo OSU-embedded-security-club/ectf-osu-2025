@@ -93,12 +93,10 @@ pub fn sendWithAcks(opcode: SendOpcode, bytes: []const u8) !void {
     uart.writeBytes(&header.asBytes());
     try waitForAck();
 
-    if (bytes.len > 0) {
-        var iter = std.mem.window(u8, bytes, 256, 256);
-        while (iter.next()) |chunk| {
-            uart.writeBytes(chunk);
-            try waitForAck();
-        }
+    var i: usize = 0;
+    while (i < bytes.len) : (i += 256) {
+        uart.writeBytes(bytes[i..@min(i + 256, bytes.len)]);
+        try waitForAck();
     }
 }
 
