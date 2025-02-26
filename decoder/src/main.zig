@@ -72,12 +72,7 @@ fn run() !void {
     // Process messages forever. On error, send it to the host, and continue processing messages
     while (true) {
         process() catch |err| {
-            // A major error has bubbled up to here, suggesting an unrecoverable state and that we are possibly under attack.
-            // We halt for 5 seconds for a small amount of brute-force attack prevention.
-            // https://rules.ectf.mitre.org/faq.html#can-we-add-intentional-delays-during-boot-to-make-it-more-difficult-for-an-attacker-to-collect-large-numbers-of-observations
-            // _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(2450));
             messaging.sendError("{}", .{err});
-            // _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(2450));
         };
     }
 }
@@ -137,16 +132,6 @@ export fn main() callconv(.C) noreturn {
     hardware.disable();
 
     _ = msdk.LED_Init();
-
-    // Turn on blue LED to indicate we have not started yet
-    msdk.LED_On(msdk.LED3);
-
-    // Wait for some time before we start processing to help prevent brute force attacks
-    // https://rules.ectf.mitre.org/faq.html#can-we-add-intentional-delays-during-boot-to-make-it-more-difficult-for-an-attacker-to-collect-large-numbers-of-observations
-    // _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(4500));
-
-    // Turn off the blue LED and start the startup process
-    msdk.LED_Off(msdk.LED3);
 
     // Wrap our idiomatic Zig entrypoint `run` to catch its error
     var errored = false;

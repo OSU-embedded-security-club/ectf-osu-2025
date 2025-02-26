@@ -390,6 +390,8 @@ This aspect of the design secures the system in the following ways:
 
 == Memory Protection Unit
 
+The Memory Protection Unit (MPU) is enabled on the decoder as a defensive countermeasure to code injection and serves as an additional layer of security. We disable writing to flash, and prevent executing in SRAM.
+
 == Encryption at Rest
 
 Before writing to flash, the contents of the page are first encrypted with a symmetric key $K_"flash"$ using Salsa20. $K_"flash"$ created by the decoder at build time and stored within the encrypted firmware (see @decoder). An incrementing nonce is stored next to each page in plaintext, to prevent nonce reuse. This adds another layer of security aiming to prevent offline attacks where a sophisticated attacker is able to dump the flash of the decoder and brute force the subscription's root hashes.
