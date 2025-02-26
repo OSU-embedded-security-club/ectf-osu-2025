@@ -3,29 +3,7 @@
 const std = @import("std");
 const msdk = @import("msdk");
 const secrets = @import("secrets");
-
-const regions = [_]msdk.ARM_MPU_Region_t{
-    .{
-        .RBAR = msdk.ARM_MPU_RBAR(0, 0x1000_0000),
-        .RASR = msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_RO, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_512KB),
-    },
-    // .{
-    //     .RBAR = msdk.ARM_MPU_RBAR(1, 0x1006_0000),
-    //     .RASR = msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_128KB),
-    // },
-    .{
-        .RBAR = msdk.ARM_MPU_RBAR(1, 0x2000_4000),
-        .RASR = msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_RO, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_16KB),
-    },
-    .{
-        .RBAR = msdk.ARM_MPU_RBAR(2, 0x2000_0000),
-        .RASR = msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_128KB),
-    },
-    .{
-        .RBAR = msdk.ARM_MPU_RBAR(3, 0x4000_0000),
-        .RASR = msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_512MB),
-    },
-};
+const messaging = @import("messaging.zig");
 
 /// Enable the Memory Protection Unit (MPU) over regions to make the code RX and
 /// the RAM RW
@@ -33,16 +11,23 @@ pub fn mpu() void {
     msdk.ARM_MPU_Disable();
 
     msdk.ARM_MPU_SetRegion(msdk.ARM_MPU_RBAR(0, @intFromPtr(&secrets.public_key)), msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_RO, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b11111100, msdk.ARM_MPU_REGION_SIZE_128B));
+    messaging.sendDebug("intFromPtr: 0x{x}", .{@intFromPtr(&secrets.public_key)});
 
+    // make SRAM non-executable
     msdk.ARM_MPU_SetRegion(
         msdk.ARM_MPU_RBAR(1, 0x20000000),
-        msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_128KB),
+        msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_1MB),
     );
+    msdk.ARM_MPU_Enable(msdk.MPU_CTRL_HFNMIENA_Msk | msdk.MPU_CTRL_PRIVDEFENA_Msk);
+
+    // except for this region which must be executable
     msdk.ARM_MPU_SetRegion(
         msdk.ARM_MPU_RBAR(2, 0x20000000),
-        msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_32B),
+        msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b10000000, msdk.ARM_MPU_REGION_SIZE_4KB),
     );
+    msdk.ARM_MPU_Enable(msdk.MPU_CTRL_HFNMIENA_Msk | msdk.MPU_CTRL_PRIVDEFENA_Msk);
 
+    // Make FLASH read only
     msdk.ARM_MPU_SetRegion(
         msdk.ARM_MPU_RBAR(3, 0x10000000),
         msdk.ARM_MPU_RASR(0, msdk.ARM_MPU_AP_RO, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_256KB),
