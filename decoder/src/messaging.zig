@@ -101,8 +101,6 @@ pub fn sendWithAcks(opcode: SendOpcode, bytes: []const u8) !void {
 
 /// Send a single ACK to the host
 pub fn sendAck() void {
-    sendDebug("about to ACK", .{});
-
     const packet = Header{ .opcode = .Ack };
     uart.writeBytes(&packet.asBytes());
 }
