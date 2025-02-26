@@ -89,7 +89,6 @@ fn waitForAck() !void {
 /// every 256 bytes
 pub fn sendWithAcks(opcode: SendOpcode, bytes: []const u8) !void {
     var header = Header{ .opcode = opcode, .length = @intCast(bytes.len) };
-
     uart.writeBytes(&header.asBytes());
     try waitForAck();
 
@@ -111,20 +110,22 @@ var message_buffer: [64]u8 = undefined;
 
 /// Send a Debug message to the host
 pub fn sendDebug(comptime format: []const u8, args: anytype) void {
-    const text = std.fmt.bufPrint(message_buffer[4..], format, args) catch @panic("Message too big");
+    const text = std.fmt.bufPrint(&message_buffer, format, args) catch @panic("Message too big");
 
     const header = Header{ .opcode = .Debug, .length = @truncate(text.len) };
-    @memcpy(message_buffer[0..4], &header.asBytes());
+    uart.writeBytes(&header.asBytes());
 
-    uart.writeBytes(message_buffer[0 .. text.len + 4]);
+    uart.writeBytes(text);
 }
 
 /// Send an Error message to the host
 pub fn sendError(comptime format: []const u8, args: anytype) void {
-    const text = std.fmt.bufPrint(message_buffer[4..], format, args) catch @panic("Message too big");
+    const text = std.fmt.bufPrint(&message_buffer, format, args) catch @panic("Message too big");
 
     const header = Header{ .opcode = .Error, .length = @truncate(text.len) };
-    @memcpy(message_buffer[0..4], &header.asBytes());
+    uart.writeBytes(&header.asBytes());
+    waitForAck() catch {};
 
-    uart.writeBytes(message_buffer[0 .. text.len + 4]);
+    uart.writeBytes(text);
+    waitForAck() catch {};
 }
