@@ -73,9 +73,9 @@ fn run() !void {
             // A major error has bubbled up to here, suggesting an unrecoverable state and that we are possibly under attack.
             // We halt for 5 seconds for a small amount of brute-force attack prevention.
             // https://rules.ectf.mitre.org/faq.html#can-we-add-intentional-delays-during-boot-to-make-it-more-difficult-for-an-attacker-to-collect-large-numbers-of-observations
-            _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(2450));
+            // _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(2450));
             messaging.sendError("{}", .{err});
-            _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(2450));
+            // _ = msdk.MXC_Delay(msdk.MXC_DELAY_MSEC(2450));
         };
     }
 }
