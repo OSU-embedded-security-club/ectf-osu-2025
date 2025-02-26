@@ -21,15 +21,14 @@ pub fn readByte() lib.MSDKError!u8 {
 /// Block and keep reading from UART into `data` until all of `data` has been filled
 pub fn readBytes(data: []u8) void {
     var i: usize = 0;
-    while (i < data.len) {
-        i += msdk.MXC_UART_ReadRXFIFO(msdk.MXC_UART_GET_UART(msdk.CONSOLE_UART), data.ptr + i, data.len - i);
+    while (i < data.len) : (i += 1) {
+        data[i] = @intCast(msdk.MXC_UART_ReadCharacter(msdk.MXC_UART_GET_UART(msdk.CONSOLE_UART)));
     }
 }
 
 /// Block until all of `data` bytes has been written to UART
 pub fn writeBytes(data: []const u8) void {
-    var i: usize = 0;
-    while (i < data.len) {
-        i += msdk.MXC_UART_WriteTXFIFO(msdk.MXC_UART_GET_UART(msdk.CONSOLE_UART), data.ptr + i, data.len - i);
+    for (data) |byte| {
+        _ = msdk.MXC_UART_WriteCharacter(msdk.MXC_UART_GET_UART(msdk.CONSOLE_UART), byte);
     }
 }
