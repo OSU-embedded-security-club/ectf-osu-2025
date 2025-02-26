@@ -1,4 +1,5 @@
 //! Interact with the hardware security features of the MAX78000
+
 const msdk = @import("msdk");
 
 /// Enable the Memory Protection Unit (MPU) over regions to make the code RX and
