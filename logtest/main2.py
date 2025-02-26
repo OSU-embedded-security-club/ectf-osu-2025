@@ -3,8 +3,8 @@ from ectf25.utils.decoder import DecoderIntf
 from ectf25_design.gen_subscription import gen_subscription
 from ectf25_design.encoder import Encoder
 import argparse
-import ast
 import json
+import ast
 import traceback
 
 
@@ -14,7 +14,7 @@ def main():
     parser.add_argument("secrets")
     parser.add_argument("port")
     args = parser.parse_args()
-    data = ast.literal_eval(Path(args.data).read_text())
+    data = json.loads(Path(args.data).read_text())
     secrets = Path(args.secrets).read_bytes()
     print(secrets)
     port = args.port
@@ -28,8 +28,9 @@ def main():
     for name, commands in data.items():
         print(f"\n\n\n\n======== RUNNING {name} ============\n\n\n\n")
         for command in commands:
+            errored = False
             try:
-                op, *args = command.split()
+                op, *args = command["command"].split()
                 if op == "subscribe" or op == "bad_subscribe":
                     subscription_device_id = (
                         device_id if op == "subscribe" else bad_device_id
@@ -65,8 +66,20 @@ def main():
                 else:
                     raise ValueError(op)
             except Exception as e:
-                traceback.print_exception(e)
-                input(f"Caught error in {name}, press enter to continue")
+                print(e)
+                errored = True
+            if errored and command["expected"]:
+                print(command)
+                print(
+                    f"{name}: Error occured when not expected! Press enter to continue..."
+                )
+                input()
+            if not errored and not command["expected"]:
+                print(command)
+                print(
+                    f"{name}: Error did not occur when expected! Press enter to continue..."
+                )
+                input()
 
 
 if __name__ == "__main__":

@@ -71,11 +71,13 @@
     { "command": "decode 1000 400000002   \"TEST----FRAME2---update-subscription---zxy-----deadbeef---------\"", "expected": true },
     { "command": "decode 1000 400000003   \"TEST----FRAME3---update-subscription---zxy-----deadbeef---------\"", "expected": true }
   ],
-  "subscribe_emergency": ["subscribe 0 1000000 123456789800"],
+  "subscribe_emergency": [
+    { "command": "subscribe 0 1000000 123456789800", "expected": false }
+  ],
   "past_timestamp": [
     { "command": "decode 600000 410000001 \"TEST-----FRAME1-0123456789abcdef------zxy-----deadbeef----------\"", "expected": true },
     { "command": "decode 600000 410000050 \"TEST-----FRAME1-0123456789abcdef------zxy-----deadbeef----------\"", "expected": true },
-    { "command": "decode 600000 410000025 \"TEST-----FRAME1-0123456789abcdef------zxy-----deadbeef----------\"", "expected": true }
+    { "command": "decode 600000 410000025 \"TEST-----FRAME1-0123456789abcdef------zxy-----deadbeef----------\"", "expected": false }
   ],
   "re_flash": [
     { "command": "flash", "expected": true }
