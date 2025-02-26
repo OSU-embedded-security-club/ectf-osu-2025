@@ -101,6 +101,8 @@ pub fn sendWithAcks(opcode: SendOpcode, bytes: []const u8) !void {
 
 /// Send a single ACK to the host
 pub fn sendAck() void {
+    sendDebug("about to ACK", .{});
+
     const packet = Header{ .opcode = .Ack };
     uart.writeBytes(&packet.asBytes());
 }
@@ -122,10 +124,5 @@ pub fn sendDebug(comptime format: []const u8, args: anytype) void {
 pub fn sendError(comptime format: []const u8, args: anytype) void {
     const text = std.fmt.bufPrint(&message_buffer, format, args) catch @panic("Message too big");
 
-    const header = Header{ .opcode = .Error, .length = @truncate(text.len) };
-    uart.writeBytes(&header.asBytes());
-    waitForAck() catch {};
-
-    uart.writeBytes(text);
-    waitForAck() catch {};
+    sendWithAcks(.Error, text) catch @panic("Error while sending error");
 }

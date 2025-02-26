@@ -78,5 +78,6 @@ pub fn execute(body: []u8) !void {
 
     try flash.saveSubscriptions(channel_index);
 
+    messaging.sendDebug("subscribe success, sending S", .{});
     try messaging.sendWithAcks(.Subscribe, &.{});
 }
