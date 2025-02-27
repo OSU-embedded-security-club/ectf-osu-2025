@@ -196,8 +196,6 @@ At build time, the decoder derives the following secrets and stores them within 
   - Shared public key with the Encoder
 - $K_"subscription"$
   - Derived as $"blake3"(S_"subscription"+D_"id")$, and is the symmetric key used to encrypt and decrypt subscriptions for a particular decoder
-- $C_1, ..., C_8$
-  - List of up to 8 Channel IDs which the decoder was provisioned with
 - $K_"flash"$
   - Randomly generated 32 byte symmetric used to encrypt data before writing it to the flash storage
 
