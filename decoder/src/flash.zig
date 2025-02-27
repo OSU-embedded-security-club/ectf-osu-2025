@@ -18,8 +18,6 @@ const messaging = @import("messaging.zig");
 
 /// Initialize flash and read in any saved subscriptions into RAM
 pub fn init() !void {
-    msdk.MXC_ICC_Disable(msdk.MXC_ICC0);
-
     var meta: FlashMeta = undefined;
     read(flash_start_address, &meta);
 
@@ -89,9 +87,11 @@ fn write(address: usize, bytes: []u8) !void {
 
     // Erase the page at the `address`, write the nonce in plaintext first, then
     // write the encrypted `bytes` in
+    msdk.MXC_ICC_Disable(msdk.MXC_ICC0);
     try lib.msdkTry(msdk.MXC_FLC_PageErase(address));
     try lib.msdkTry(msdk.MXC_FLC_Write(address, @sizeOf(@TypeOf(global_nonce)), @ptrCast(&global_nonce)));
     try lib.msdkTry(msdk.MXC_FLC_Write(address + @sizeOf(@TypeOf(global_nonce)), bytes.len, @ptrCast(@alignCast(bytes.ptr))));
+    msdk.MXC_ICC_Enable(msdk.MXC_ICC0);
 }
 
 /// Write the compressed form of the subscription corresponding to the

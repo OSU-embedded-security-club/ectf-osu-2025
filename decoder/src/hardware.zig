@@ -10,7 +10,7 @@ pub fn mpu() void {
     // Make SRAM non-executable
     msdk.ARM_MPU_SetRegion(
         msdk.ARM_MPU_RBAR(0, 0x20000000),
-        msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 0, 0, 0b00000000, msdk.ARM_MPU_REGION_SIZE_1MB),
+        msdk.ARM_MPU_RASR(1, msdk.ARM_MPU_AP_FULL, msdk.ARM_MPU_ACCESS_ORDERED, 0, 1, 1, 0b00000000, msdk.ARM_MPU_REGION_SIZE_1MB),
     );
     msdk.ARM_MPU_Enable(msdk.MPU_CTRL_HFNMIENA_Msk | msdk.MPU_CTRL_PRIVDEFENA_Msk);
 
@@ -32,6 +32,8 @@ pub fn mpu() void {
 
 /// Disable all peripherals
 pub fn disablePeripherals() void {
+    msdk.MXC_ICC_Enable(msdk.MXC_ICC0);
+
     msdk.MXC_SYS_ClockDisable(msdk.MXC_SYS_PERIPH_CLOCK_GPIO0);
     msdk.MXC_SYS_ClockDisable(msdk.MXC_SYS_PERIPH_CLOCK_GPIO1);
     msdk.MXC_SYS_ClockDisable(msdk.MXC_SYS_PERIPH_CLOCK_GPIO2);
