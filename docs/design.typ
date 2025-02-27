@@ -73,18 +73,18 @@ The team is comprised of the following people from the Ohio State State Universi
 
 This document describes OSU's implementation of a secure satellite TV system as specified by #link("https://rules.ectf.mitre.org/2025", [MITRE's eCTF 2025]). The Satellite TV system features a simulated satellite sending ASCII art to subscribed hardware Decoder devices, implementing the Functional Requirements (@functional-requirements). The decoder devices are #link("https://analog.com/resources/evaluation-hardware-and-software/evaluation-boards-kits/max78000fthr", [MAX78000FTHR microcontrollers by Analog Devices]). The system is secured according to the Security Requirements (@security-requirements), and designed to defend against attacks as outlined in Attack Scenarios (@attack-scenarios), which revolve around erroneously decoding frames sent by a satellite.
 
-== Source Code and Documentation
+// == Source Code and Documentation
 
-#grid(
-  columns: 2,
-  column-gutter: 2em,
-  row-gutter: 0.75em,
-  [Source Code:],
-  link("https://github.com/OSU-embedded-security-club/ectf-osu-2025")[https://github.com/OSU-embedded-security-club/ectf-osu-2025],
+// #grid(
+//   columns: 2,
+//   column-gutter: 2em,
+//   row-gutter: 0.75em,
+//   [Source Code:],
+//   link("https://github.com/OSU-embedded-security-club/ectf-osu-2025")[https://github.com/OSU-embedded-security-club/ectf-osu-2025],
 
-  [Documentation:],
-  link("https://osu-embedded-security-club.github.io/ectf-osu-2025")[https://osu-embedded-security-club.github.io/ectf-osu-2025],
-)
+//   [Documentation:],
+//   link("https://osu-embedded-security-club.github.io/ectf-osu-2025")[https://osu-embedded-security-club.github.io/ectf-osu-2025],
+// )
 
 = Functional Requirements <functional-requirements>
 

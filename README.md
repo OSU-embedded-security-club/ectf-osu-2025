@@ -85,3 +85,16 @@ The design document is available to read [as a PDF](docs/design.pdf), or inline 
   <img src="docs/pages/page-10.svg">
   <img src="docs/pages/page-11.svg">
 </details>
+
+## Code Documentation 📖
+
+Our Zig code makes use of documentation comments which can be read as a webpage. To view it, navigate to the `decoder` directory and run the following
+
+```
+$ zig build docs
+$ python -m http.server -d docs
+```
+
+Then navigate to [http://localhost:8000](http://localhost:8000) in your browser.
+
+![Example API documentation for the host messaging namespace](docs/code.png)
