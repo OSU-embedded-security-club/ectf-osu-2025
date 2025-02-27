@@ -128,7 +128,7 @@ fn readBody(length: u16) ![]u8 {
 
 /// Entrypoint for the decoder
 export fn main() callconv(.C) noreturn {
-    hardware.disablePeripherals();
+    hardware.configure();
 
     _ = msdk.LED_Init();
 

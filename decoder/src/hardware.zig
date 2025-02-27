@@ -30,8 +30,11 @@ pub fn mpu() void {
     msdk.ARM_MPU_Enable(msdk.MPU_CTRL_HFNMIENA_Msk | msdk.MPU_CTRL_PRIVDEFENA_Msk);
 }
 
-/// Disable all peripherals
-pub fn disablePeripherals() void {
+/// Enable the ICC (Instruction Cache Controller) and disable peripherals we
+/// don't use
+pub fn configure() void {
+    // MXC_ICC0 is the instruction cache for the ARM processor, while MXC_ICC1
+    // is for the RISC coprocessor (which we don't use)
     msdk.MXC_ICC_Enable(msdk.MXC_ICC0);
 
     msdk.MXC_SYS_ClockDisable(msdk.MXC_SYS_PERIPH_CLOCK_GPIO0);
@@ -40,7 +43,7 @@ pub fn disablePeripherals() void {
     msdk.MXC_SYS_ClockDisable(msdk.MXC_SYS_PERIPH_CLOCK_DMA);
     msdk.MXC_SYS_ClockDisable(msdk.MXC_SYS_PERIPH_CLOCK_SPI0);
     msdk.MXC_SYS_ClockDisable(msdk.MXC_SYS_PERIPH_CLOCK_SPI1);
-    msdk.MXC_SYS_ClockDisable(msdk.MXC_SYS_PERIPH_CLOCK_UART0); // UART0 will be re-enabled when MXC_UART_Init is called
+    // UART0 is required so we don't disable it
     msdk.MXC_SYS_ClockDisable(msdk.MXC_SYS_PERIPH_CLOCK_UART1);
     msdk.MXC_SYS_ClockDisable(msdk.MXC_SYS_PERIPH_CLOCK_UART2);
     msdk.MXC_SYS_ClockDisable(msdk.MXC_SYS_PERIPH_CLOCK_UART3);
