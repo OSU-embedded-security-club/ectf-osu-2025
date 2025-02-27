@@ -27,8 +27,7 @@ const DecoderError = error{
     /// The body is invalid for the given message kind attempting to be decoded
     InvalidBody,
 
-    /// The message has an opcode which is not defined in the Functional
-    /// Requirements
+    /// The message has an opcode which is not defined in the Functional Requirements
     /// https://rules.ectf.mitre.org/2025/specs/detailed_specs.html#decoder-interface
     InvalidOpcode,
 
@@ -129,7 +128,7 @@ fn readBody(length: u16) ![]u8 {
 
 /// Entrypoint for the decoder
 export fn main() callconv(.C) noreturn {
-    hardware.disable();
+    hardware.disablePeripherals();
 
     _ = msdk.LED_Init();
 

@@ -31,7 +31,7 @@ pub fn mpu() void {
 }
 
 /// Disable all peripherals
-pub fn disable() void {
+pub fn disablePeripherals() void {
     msdk.MXC_SYS_ClockDisable(msdk.MXC_SYS_PERIPH_CLOCK_GPIO0);
     msdk.MXC_SYS_ClockDisable(msdk.MXC_SYS_PERIPH_CLOCK_GPIO1);
     msdk.MXC_SYS_ClockDisable(msdk.MXC_SYS_PERIPH_CLOCK_GPIO2);

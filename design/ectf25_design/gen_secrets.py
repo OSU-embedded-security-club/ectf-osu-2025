@@ -39,7 +39,7 @@ def gen_secrets(channels: list[int]) -> bytes:
         # Each channel has a hash key derivation tree, which is a binary tree of height 64. The seed is the root of the tree.
         # Children are computed by calculating blake3(node + 'L') or blake3(node + 'R'). The bottom 2**64 nodes give a unique symmetric key for
         # each timestamp. When a subscription is generated, only the nodes neccesary for calculating keys in the subscription's time range are
-        # sent to the decoder. See section 4.1 in the design document for details.
+        # sent to the decoder. See section 7.1 in the design document for details.
         "seeds": {str(channel): os.urandom(24).hex() for channel in channels},
 
         # A shared symmetric key used to encrypt the entire decode packet, including timestamp and channel ID. This is embedded in each decoder.
@@ -47,11 +47,11 @@ def gen_secrets(channels: list[int]) -> bytes:
 
         # Subscription packets are encrypted with a unique key for each decoder, computed as `blake3(subscription_salt + device_id)`.
         # This hash is computed at build time and embedded in each decoder, and is computed again in gen_subscription.
-        # See section 4.2 in the design document for details.
+        # See section 7.2 in the design document for details.
         "subscription_salt": os.urandom(32).hex(),
 
         # The Ed25519 keypair used for signing all messages. The public key is embedded in each decoder.
-        # See section 4.3 in the design document for details.
+        # See section 7.3 in the design document for details.
         "public_key": keypair.public_key().export_key(format="raw").hex(),
         "private_key": keypair.export_key(format="PEM"),
     }

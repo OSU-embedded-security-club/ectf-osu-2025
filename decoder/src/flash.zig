@@ -3,10 +3,10 @@
 //!
 //! Flash layout by pages:
 //! 0-27   Encrypted firmware
-//! 28-51  Unused
-//! 52     Metadata
-//! 53-61  Subscriptions (1 per channel, 8 total)
-//! 62-63  Unused
+//! 28-53  Unused
+//! 54     Metadata
+//! 55-62  Subscriptions (1 per channel, 8 total)
+//! 63  Unused
 
 const std = @import("std");
 const msdk = @import("msdk");
@@ -16,32 +16,8 @@ const secrets = @import("secrets");
 const main = @import("main.zig");
 const messaging = @import("messaging.zig");
 
-/// Interrupt Request handler
-fn irq() callconv(.C) void {
-    const temp = msdk.MXC_FLC0.*.intr;
-
-    if (temp & msdk.MXC_F_FLC_INTR_DONE != 0) {
-        msdk.MXC_FLC0.*.intr &= ~msdk.MXC_F_FLC_INTR_DONE;
-        messaging.sendDebug(" -> Interrupt! (Flash access done)", .{});
-    }
-
-    if (temp & msdk.MXC_F_FLC_INTR_AF != 0) {
-        msdk.MXC_FLC0.*.intr &= ~msdk.MXC_F_FLC_INTR_AF;
-        messaging.sendDebug(" -> Interrupt! (Flash access failure)", .{});
-    }
-}
-
 /// Initialize flash and read in any saved subscriptions into RAM
 pub fn init() !void {
-    msdk.MXC_NVIC_SetVector(msdk.FLC0_IRQn, irq);
-
-    // Zig has some trouble translating `NVIC_EnableIRQ` so we help out its
-    // missing `__COMPILER_BARRIER();` by adding our own fences
-    @fence(std.builtin.AtomicOrder.seq_cst);
-    msdk.NVIC_EnableIRQ(msdk.FLC0_IRQn);
-    @fence(std.builtin.AtomicOrder.seq_cst);
-
-    try lib.msdkTry(msdk.MXC_FLC_EnableInt(msdk.MXC_F_FLC_INTR_DONEIE | msdk.MXC_F_FLC_INTR_AFIE));
     msdk.MXC_ICC_Disable(msdk.MXC_ICC0);
 
     var meta: FlashMeta = undefined;
@@ -55,6 +31,7 @@ pub fn init() !void {
         return;
     }
 
+    // The decoder supports a max of up to 8 subscriptions
     meta.num_valid = @min(meta.num_valid, 8);
 
     // Read in the valid subscriptions and initialize them

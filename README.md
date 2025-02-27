@@ -49,7 +49,6 @@ A [Taskfile](https://taskfile.dev) is available to easily run common tasks
 * bench-encoder: Benchmark the encoder
 * bench-subscription: Benchmark creating a subscription on the decoder
 * docs: Build documentation design file into PDF and SVG artifacts
-* shell: Spawn a shell in the docker container
 * stress-decoder: Use MITRE's stress test to benchmark the decoder
 * stress-encoder: Use MITRE's stress test to benchmark the encoder
 ```

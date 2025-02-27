@@ -71,14 +71,16 @@ def gen_subscription(
     ).digest()
 
     # Get the root node of the hash tree for this channel.
+    if str(channel) not in secrets["seeds"]:
+        raise ValueError(f"Satellite system not provisioned for channel {channel}")
     seed = bytes.fromhex(secrets["seeds"][str(channel)])
 
-    # Compute the positions of the nodes in the tree needed for decrypting nodes within the timestamp range.
+    # Compute the positions of the roots in the tree needed for decrypting frames within the timestamp range.
     # We only need to send the hash values at these positions, and don't need to send any metadata about where they are in the tree,
-    # since the decoder has a copy of this algorithm and can calculate the positions based on the start and end timestamps.
+    # since the decoder uses the same algorithm and can calculate the positions based on the start and end timestamps.
     roots = get_roots(start, end)
 
-    # For each root position, compute the value of the tree at that position.
+    # For each root position, compute the hash value of the tree at that position.
     hashes = []
     for root in roots:
         curr = seed
@@ -135,7 +137,7 @@ def get_roots(a: int, b: int) -> list[Root]:
         # `ctz(a)` (count trailing zeroes) is the largest
         # that the power can be due to the alignment of `a`.
         # Also, we need `a + 2**power - 1 <= b` so the range doesn't go too long,
-        # which by algebra implies `power <= (b - a + 1).bit_length() - 1`.
+        # which implies `power <= (b - a + 1).bit_length() - 1`.
         power = min((b - a + 1).bit_length() - 1, ctz(a))
         ranges.append(Root(power=power, offset=a))
         a += 1 << power

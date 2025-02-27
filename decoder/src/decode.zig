@@ -29,7 +29,7 @@ const Decode = extern struct {
     message: [64]u8 align(1),
 
     /// Given a slice of bytes `bytes`, check that it is a valid Decode message,
-    /// and return a pointer to it into the body
+    /// and return `bytes` cast as a `*Decode`
     pub fn fromBytes(bytes: []u8) !*Decode {
         // Make sure that `bytes` is a correct size, accounting for the fact
         // that the message is variable width

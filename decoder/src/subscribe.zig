@@ -27,7 +27,7 @@ const SubscribeHeader = extern struct {
     channel_id: u32 align(1),
 
     /// Given a slice of bytes `body`, check that it is a valid Subscription
-    /// message, and return a pointer to it into the body
+    /// message, and return `bytes` cast as a `*const SubscribeHeader`
     pub fn fromBytes(bytes: []u8) !*const SubscribeHeader {
         // Make sure that `bytes` is a reasonable size
         if (bytes.len < @sizeOf(SubscribeHeader) + @offsetOf(lib.Subscription.Bytes, "root_hashes") or bytes.len > max_message_size)
@@ -36,9 +36,9 @@ const SubscribeHeader = extern struct {
         const self: *const SubscribeHeader = @ptrCast(bytes.ptr);
 
         // The `start`, `end`, and `channel_id` fields are encrypted with the
-        // shared `subscription_key` between the encoder and decoder.
-        // Before we continue, we must decrypt the subscription. The nonce is
-        // the first 8 bytes of the signature
+        // shared `subscription_key` between the encoder and decoder. Before we
+        // continue, we must decrypt the subscription. The nonce is the first 8
+        // bytes of the signature
         const nonce = self.signature[0..8];
         const message = bytes[@offsetOf(SubscribeHeader, "start")..];
         std.crypto.stream.salsa.Salsa20.xor(message, message, 0, secrets.subscription_key, nonce.*);
@@ -57,6 +57,8 @@ const SubscribeHeader = extern struct {
 pub fn execute(body: []u8) !void {
     const message = try SubscribeHeader.fromBytes(body);
 
+    // Find the index into the global subscriptions array for this channel ID if
+    // it exists, otherwise the first available index
     const channel_index = for (&main.subscriptions, 0..) |*subscription, i| {
         if (subscription.*) |*sub| {
             if (sub.serialized.channel_id == message.channel_id) {

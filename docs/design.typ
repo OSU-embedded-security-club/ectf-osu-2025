@@ -545,7 +545,7 @@ def get_roots(a: int, b: int) -> list[Root]:
         # `ctz(a)` (count trailing zeroes) is the largest
         # that the power can be due to the alignment of `a`.
         # Also, we need `a + 2**power - 1 <= b` so the range doesn't go too long,
-        # which by algebra implies `power <= (b - a + 1).bit_length() - 1`.
+        # which implies `power <= (b - a + 1).bit_length() - 1`.
         power = min((b - a + 1).bit_length() - 1, ctz(a))
         ranges.append(Root(power=power, offset=a))
         a += 2 ** power

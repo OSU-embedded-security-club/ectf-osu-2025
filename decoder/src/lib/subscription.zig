@@ -61,8 +61,7 @@ pub const Subscription = struct {
         };
         self.serialized.* = .{ .channel_id = channel_id, .start = start, .end = end };
 
-        // Walk over the raw `root_hash_bytes` and split it into the 24 byte
-        // hash chunks required
+        // Walk over the raw `root_hash_bytes` and split it into 24 byte chunks
         var iter = std.mem.window(u8, root_hash_bytes, 24, 24);
         var i: usize = 0;
         while (iter.next()) |hash| {
@@ -85,7 +84,7 @@ pub const Subscription = struct {
     /// Compute and cache the positions of the smallest set of roots that allows
     /// the computation of all keys within the range of timestamps [start, end]
     /// (inclusive), but none outside of that range. The appendix in the design
-    /// document proves that the length of the result is at most 126.
+    /// document proves that the length of the result is at most 126
     fn calculateRootPositions(self: *Subscription) void {
         if (self.serialized.start == 0 and self.serialized.end == std.math.maxInt(u64)) {
             self.roots[0] = RootPosition{ .offset = 0, .power = 64 };

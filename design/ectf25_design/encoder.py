@@ -85,9 +85,9 @@ class Encoder:
         # Sign the message using the private key.
         signature = self.signer.sign(message)
 
-        # Encrypt the message again using the metadata key so that the channel and timestamp are also encrypted.
-        # The nonce is the first 8 bytes of the signature since that is a random value which the decoder can
-        # know without us including any additional data in our message.
+        # Encrypt the message again using the metadata key so that the channel, timestamp, and channel 0 frame
+        # data are also encrypted. The nonce is the first 8 bytes of the signature since that is a random value
+        # which the decoder can know without us including any additional data in our message.
         return signature + Salsa20.new(key=self.metadata_key, nonce=signature[0:8]).encrypt(message)
 
 
