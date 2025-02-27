@@ -33,9 +33,9 @@ RUN apt-get install -y unzip && \
     unzip v2024_02.zip && \
     rm -f v2024_02.zip
 
-RUN curl -L "https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz" -o zig.tar.xz && \
+RUN curl -L "https://ziglang.org/download/0.13.0/zig-linux-$(uname -m)-0.13.0.tar.xz" -o zig.tar.xz && \
     tar -xf zig.tar.xz && \
-    mv zig-linux-x86_64-0.13.0 /usr/local/zig && \
+    mv zig-linux-$(uname -m)-0.13.0 /usr/local/zig && \
     ln -s /usr/local/zig/zig /usr/local/bin/zig && \
     chmod +x /usr/local/zig/zig && \
     rm zig.tar.xz
